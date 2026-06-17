@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Mycelium Health Monitor · RC7 · Bartlett UCL</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
 :root {
   --bg:        #F8F8F6;
@@ -87,6 +87,20 @@ body {
 .btn-auth:hover { opacity: 0.85; }
 
 /* ── User pill in topbar ── */
+/* ── Result image sizing ── */
+#ov-result-wrap img {
+  width: 100%;
+  max-height: 520px;
+  object-fit: contain;
+  display: block;
+}
+#ov2-preview-img {
+  width: 100%;
+  max-height: 260px;
+  object-fit: contain;
+  display: block;
+}
+
 .user-pill {
   display: flex; align-items: center; gap: 8px;
   font-size: 12px; color: var(--text-2); cursor: pointer;
@@ -642,12 +656,9 @@ select:focus { outline: none; border-color: var(--green); }
             <div id="st-ov2" style="font-size:11px;color:var(--text-3);margin-top:6px;min-height:14px"></div>
           </div>
           <!-- Result preview (small, inside upload card) -->
-          <div id="ov2-empty" style="display:none"></div>
-          <div id="ov2-result-img-wrap" style="display:none;grid-column:1/-1;margin-top:8px">
-            <canvas id="ov2-result-canvas" style="display:block;width:100%;border-radius:var(--r);border:1px solid var(--border)"></canvas>
-          </div>
-          <div id="ov2-det-result" style="display:none;grid-column:1/-1">
-            <div id="ov2-dlist"></div>
+          <!-- Small original image preview only — result goes to right panel -->
+          <div id="ov2-preview-wrap" style="display:none;grid-column:1/-1;margin-top:8px">
+            <img id="ov2-preview-img" style="width:100%;max-height:240px;object-fit:contain;border-radius:var(--r);border:1px solid var(--border)">
           </div>
         </div>
       </div>
@@ -722,7 +733,7 @@ select:focus { outline: none; border-color: var(--green); }
       <!-- Last analysis result -->
       <div class="card" style="margin-bottom:12px">
         <div class="card-label">Last analysis result</div>
-        <div id="ov-result-wrap" style="background:var(--bg);border-radius:var(--r);min-height:260px;display:flex;align-items:center;justify-content:center;color:var(--text-3);font-size:13px;border:1px solid var(--border)">
+        <div id="ov-result-wrap" style="background:var(--bg);border-radius:var(--r);min-height:260px;display:flex;align-items:center;justify-content:center;color:var(--text-3);font-size:13px;border:1px solid var(--border);overflow:hidden">
           No analysis yet — upload a photo to begin
         </div>
         <div id="ov-det-list" style="margin-top:10px"></div>
@@ -1395,6 +1406,7 @@ let _leafletMarkers = [];
 
 function initLeafletMap() {
   if (_leafletMap) return;
+  if (typeof L === 'undefined') { console.warn('Leaflet not loaded'); return; }
   _leafletMap = L.map('contrib-leaflet-map', {
     center: [20, 0], zoom: 1.5,
     zoomControl: true, scrollWheelZoom: false,
@@ -2033,12 +2045,15 @@ function initPolyOv(file){
   polyImgOv=new Image();polyImgOv._file=file;
   polyImgOv.onload=function(){
     document.getElementById('drop-ov2').style.display='none';
+    // Show original image preview immediately on upload
+    const _prevWrap = document.getElementById('ov2-preview-wrap');
+    const _prevImg  = document.getElementById('ov2-preview-img');
+    if(_prevWrap && _prevImg){ _prevImg.src = polyImgOv.src; _prevWrap.style.display='block'; }
     const wrap=document.getElementById('poly-wrap-ov');wrap.style.display='block';
     polyCanvasOv=document.getElementById('poly-canvas-ov');polyCanvasOv.width=polyImgOv.naturalWidth;polyCanvasOv.height=polyImgOv.naturalHeight;
     polyCtxOv=polyCanvasOv.getContext('2d');polyPointsOv=[];polyClosedOv=false;drawPolyOv();
     document.getElementById('poly-hint-ov').style.display='block';
     document.getElementById('meta-fields-ov').style.display='block';
-    document.getElementById('ov2-empty').style.display='none';
     const now=new Date();
     document.getElementById('obs-date-ov').value=now.toISOString().slice(0,10);
     document.getElementById('obs-time-ov').value=now.toTimeString().slice(0,5);
@@ -2083,14 +2098,21 @@ if(btnOv2) btnOv2.addEventListener('click',async function(){
   try {
     const r=await authFetch(`${API}/detect`,{method:'POST',body:fd});
     const d=await r.json();if(!d.success)throw new Error(d.error||'Detection failed');
-    const gc=document.getElementById('ov2-result-canvas');
-    const resImg=new Image();
-    resImg.onload=()=>{gc.width=resImg.naturalWidth;gc.height=resImg.naturalHeight;const gx=gc.getContext('2d');gx.drawImage(resImg,0,0);gx.strokeStyle='rgba(255,255,255,0.4)';gx.lineWidth=1;gx.setLineDash([4,4]);for(let i=1;i<3;i++){gx.beginPath();gx.moveTo(i*gc.width/3,0);gx.lineTo(i*gc.width/3,gc.height);gx.stroke();gx.beginPath();gx.moveTo(0,i*gc.height/3);gx.lineTo(gc.width,i*gc.height/3);gx.stroke();}gx.setLineDash([]);};
-    resImg.src='data:image/jpeg;base64,'+d.result_image;
-    document.getElementById('ov2-result-img-wrap').style.display='block';document.getElementById('ov2-empty').style.display='none';
-    document.getElementById('ov-result-wrap').innerHTML=`<img src="data:image/jpeg;base64,${d.result_image}" style="width:100%;border-radius:var(--r);border:1px solid var(--border)">`;
-    document.getElementById('ov2-det-result').style.display='block';
-    document.getElementById('ov2-dlist').innerHTML=`<div class="det-row"><span class="det-key">State</span>${badge(d.yolo_state)}</div><div class="det-row"><span class="det-key">Score</span><strong>${d.health_score}</strong> / 100</div><div class="det-row"><span class="det-key">Detections</span><span>${d.total_detections}</span></div>${d.detections.map(x=>`<div class="det-row" style="padding-left:12px"><span class="det-key" style="color:var(--text-3)">↳ ${stateLabel(x.class_name)}</span><span class="det-conf">${x.confidence}%</span></div>`).join('')}`;
+    // LEFT panel: show original image as small preview only
+    const previewWrap = document.getElementById('ov2-preview-wrap');
+    const previewImg  = document.getElementById('ov2-preview-img');
+    if(previewWrap && previewImg && polyImgOv) {
+      previewImg.src = polyImgOv.src;
+      previewWrap.style.display = 'block';
+    }
+    // RIGHT panel: show YOLO annotated result image + metadata
+    document.getElementById('ov-result-wrap').innerHTML=`<img src="data:image/jpeg;base64,${d.result_image}">`;
+    const detListEl = document.getElementById('ov-det-list');
+    if(detListEl) detListEl.innerHTML=`
+      <div class="det-row"><span class="det-key">State</span>${badge(d.yolo_state)}</div>
+      <div class="det-row"><span class="det-key">Score</span><strong style="color:${d.health_score<60?'var(--red)':d.health_score<75?'var(--amber)':'var(--green)'}">${d.health_score}</strong> / 100</div>
+      <div class="det-row"><span class="det-key">Detections</span><span>${d.total_detections}</span></div>
+      ${d.detections.map(x=>`<div class="det-row" style="padding-left:12px"><span class="det-key" style="color:var(--text-3)">↳ ${stateLabel(x.class_name)}</span><span class="det-conf">${x.confidence}%</span></div>`).join('')}`;
     st.textContent='Analysis complete · '+(new Date().toLocaleTimeString());st.style.color='var(--green)';
     loadData();loadSamples();
   } catch(e){st.textContent='Error: '+e.message;st.style.color='var(--red)';}
