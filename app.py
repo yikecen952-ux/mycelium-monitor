@@ -454,78 +454,95 @@ def detect():
     ext       = os.path.splitext(file.filename)[1].lower() or ".jpg"
     filename  = f"{uuid.uuid4().hex}{ext}"
     save_path = os.path.join(UPLOAD_FOLDER, filename)
-    file.save(save_path)
 
-    results = model(save_path, conf=0.1)  # Low threshold for small dataset
-    result  = results[0]
+    try:
+        file.save(save_path)
 
-    result_filename = f"result_{os.path.splitext(filename)[0]}.jpg"
-    result_path     = os.path.join(UPLOAD_FOLDER, result_filename)
-    result.save(filename=result_path)
+        results = model(save_path, conf=0.1)
+        result  = results[0]
 
-    img_h, img_w = result.orig_shape[:2]
-    img_area = img_w * img_h
+        result_filename = f"result_{os.path.splitext(filename)[0]}.jpg"
+        result_path     = os.path.join(UPLOAD_FOLDER, result_filename)
+        result.save(filename=result_path)
 
-    detections = []
-    for box in result.boxes:
-        class_id   = int(box.cls[0])
-        class_name = model.names[class_id]
-        confidence = round(float(box.conf[0]) * 100, 1)
-        x1, y1, x2, y2 = [round(float(v), 1) for v in box.xyxy[0]]
-        area_pct = round((x2-x1)*(y2-y1) / img_area * 100, 1)
-        detections.append({
-            "class_id":   class_id,
-            "class_name": class_name,
-            "confidence": confidence,
-            "area_pct":   area_pct,
-            "bbox": {"x1":x1,"y1":y1,"x2":x2,"y2":y2,
-                     "width":round(x2-x1,1),"height":round(y2-y1,1)}
+        img_h, img_w = result.orig_shape[:2]
+        img_area = img_w * img_h if img_w * img_h > 0 else 1
+
+        detections = []
+        if result.boxes is not None:
+            for box in result.boxes:
+                try:
+                    class_id   = int(box.cls[0])
+                    class_name = model.names[class_id]
+                    confidence = round(float(box.conf[0]) * 100, 1)
+                    x1, y1, x2, y2 = [round(float(v), 1) for v in box.xyxy[0]]
+                    area_pct = round((x2-x1)*(y2-y1) / img_area * 100, 1)
+                    detections.append({
+                        "class_id":   class_id,
+                        "class_name": class_name,
+                        "confidence": confidence,
+                        "area_pct":   area_pct,
+                        "bbox": {"x1":x1,"y1":y1,"x2":x2,"y2":y2,
+                                 "width":round(x2-x1,1),"height":round(y2-y1,1)}
+                    })
+                except Exception as box_err:
+                    print(f"Box parsing error: {box_err}")
+                    continue
+
+        state_areas = {}
+        for d in detections:
+            n = d["class_name"]
+            state_areas[n] = round(state_areas.get(n, 0) + d["area_pct"], 1)
+
+        # Find sensing delta for this sample+date
+        delta, surf_hum, env_hum, temp_c = find_sensing_delta(user_id, sample_id, timestamp)
+
+        health_score = calc_health_score(detections, delta_humidity=delta,
+                                         sample_id=sample_id, user_id=user_id)
+        yolo_state   = main_state(detections)
+
+        conn = get_db()
+        conn.execute("""
+            INSERT INTO detections
+                (user_id, sample_id, model_type, timestamp, image_path,
+                 yolo_state, health_score, temp_c, env_humidity, surface_humidity,
+                 delta_humidity, notes)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+        """, (user_id, sample_id, model_type, timestamp, filename,
+              yolo_state, health_score, temp_c, env_hum, surf_hum, delta, notes))
+        conn.commit()
+
+        realtime_delta = try_compute_delta_realtime(sample_id, user_id, conn)
+        if realtime_delta and delta is None:
+            delta = realtime_delta
+        conn.close()
+
+        with open(result_path, "rb") as f:
+            result_b64 = base64.b64encode(f.read()).decode()
+
+        print(f"✅ Detection complete: {len(detections)} objects, score={health_score}, state={yolo_state}")
+
+        return jsonify({
+            "success":          True,
+            "sample_id":        sample_id,
+            "timestamp":        timestamp,
+            "yolo_state":       yolo_state,
+            "health_score":     health_score,
+            "delta_humidity":   delta,
+            "total_detections": len(detections),
+            "state_areas":      state_areas,
+            "detections":       detections,
+            "result_image":     result_b64,
         })
 
-    state_areas = {}
-    for d in detections:
-        n = d["class_name"]
-        state_areas[n] = round(state_areas.get(n, 0) + d["area_pct"], 1)
-
-    # Find sensing delta for this sample+date
-    delta, surf_hum, env_hum, temp_c = find_sensing_delta(user_id, sample_id, timestamp)
-
-    health_score = calc_health_score(detections, delta_humidity=delta,
-                                     sample_id=sample_id, user_id=user_id)
-    yolo_state   = main_state(detections)
-
-    conn = get_db()
-    conn.execute("""
-        INSERT INTO detections
-            (user_id, sample_id, model_type, timestamp, image_path,
-             yolo_state, health_score, temp_c, env_humidity, surface_humidity,
-             delta_humidity, notes)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
-    """, (user_id, sample_id, model_type, timestamp, filename,
-          yolo_state, health_score, temp_c, env_hum, surf_hum, delta, notes))
-    conn.commit()
-
-    # Also try realtime pairing if 1-min reading was just done
-    realtime_delta = try_compute_delta_realtime(sample_id, user_id, conn)
-    if realtime_delta and delta is None:
-        delta = realtime_delta
-    conn.close()
-
-    with open(result_path, "rb") as f:
-        result_b64 = base64.b64encode(f.read()).decode()
-
-    return jsonify({
-        "success":          True,
-        "sample_id":        sample_id,
-        "timestamp":        timestamp,
-        "yolo_state":       yolo_state,
-        "health_score":     health_score,
-        "delta_humidity":   delta,
-        "total_detections": len(detections),
-        "state_areas":      state_areas,
-        "detections":       detections,
-        "result_image":     result_b64,
-    })
+    except Exception as e:
+        import traceback
+        print(f"❌ Detection error: {traceback.format_exc()}")
+        # Clean up saved file on error
+        if os.path.exists(save_path):
+            try: os.remove(save_path)
+            except: pass
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 # ── Surface sensor (1-min reading from ESP32) ─────────────────────────────────
