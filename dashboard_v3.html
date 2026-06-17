@@ -1245,12 +1245,24 @@ function getToken()    { return localStorage.getItem('sf_token'); }
 function getUsername() { return localStorage.getItem('sf_username'); }
 function getIsAdmin()  { return localStorage.getItem('sf_is_admin') === 'true'; }
 
-function authHeaders() {
+function authHeaders(includeContentType=true) {
   const t = getToken();
-  return t ? { 'Authorization': 'Bearer ' + t, 'Content-Type': 'application/json' } : {};
+  if (!t) return {};
+  const h = { 'Authorization': 'Bearer ' + t };
+  if (includeContentType) h['Content-Type'] = 'application/json';
+  return h;
 }
 function authFetch(url, opts={}) {
-  opts.headers = Object.assign({}, authHeaders(), opts.headers || {});
+  // If body is FormData, do NOT set Content-Type (browser handles multipart boundary)
+  const isFormData = opts.body instanceof FormData;
+  const baseHeaders = isFormData
+    ? { 'Authorization': getToken() ? 'Bearer ' + getToken() : undefined }
+    : authHeaders();
+  // Remove undefined values
+  const cleanHeaders = Object.fromEntries(Object.entries(baseHeaders).filter(([,v])=>v));
+  opts.headers = Object.assign({}, cleanHeaders, opts.headers || {});
+  // Remove Content-Type from headers if FormData (let browser set it)
+  if (isFormData && opts.headers['Content-Type']) delete opts.headers['Content-Type'];
   return fetch(url, opts);
 }
 
@@ -1848,7 +1860,7 @@ async function uploadCSVFiles() {
     fd.append('file', file);
     fd.append('csv_type', type);
     try {
-      const r = await authFetch(`${API}/upload-csv`, { method:'POST', headers:{Authorization:'Bearer '+getToken()}, body:fd });
+      const r = await authFetch(`${API}/upload-csv`, { method:'POST', body:fd });
       // Override Content-Type (let browser set multipart boundary)
       const d = await r.json();
       if(d.success) results.push(`${type}: ${d.inserted} rows imported`);
@@ -1990,7 +2002,7 @@ if(btnUp) btnUp.addEventListener('click',async function(){
   const fd=new FormData(); fd.append('image',fileToSend); fd.append('sample_id',sid);
   if(date&&time)fd.append('timestamp',`${date} ${time}:00`);
   try {
-    const r=await authFetch(`${API}/detect`,{method:'POST',headers:{Authorization:'Bearer '+getToken()},body:fd});
+    const r=await authFetch(`${API}/detect`,{method:'POST',body:fd});
     const d=await r.json(); if(!d.success)throw new Error(d.error||'Detection failed');
     const gc=document.getElementById('grid-result-canvas');
     const resImg=new Image();
@@ -2069,7 +2081,7 @@ if(btnOv2) btnOv2.addEventListener('click',async function(){
   const fd=new FormData();fd.append('image',fileToSend);fd.append('sample_id',sid);
   if(date&&time)fd.append('timestamp',`${date} ${time}:00`);
   try {
-    const r=await authFetch(`${API}/detect`,{method:'POST',headers:{Authorization:'Bearer '+getToken()},body:fd});
+    const r=await authFetch(`${API}/detect`,{method:'POST',body:fd});
     const d=await r.json();if(!d.success)throw new Error(d.error||'Detection failed');
     const gc=document.getElementById('ov2-result-canvas');
     const resImg=new Image();
@@ -2251,8 +2263,7 @@ async function submitAllContributions(){
     const annsForBackend=item.annotations.map(ann=>({label:ann.label,points:ann.normPoints,img_width:cCanvas?cCanvas.width:1000,img_height:cCanvas?cCanvas.height:1000}));
     const fd=new FormData();fd.append('image',item.file);fd.append('contributor',contributor);fd.append('location',location);fd.append('lat',lat);fd.append('lng',lng);fd.append('mycelium_type',myc_type);fd.append('notes',notes);fd.append('annotations',JSON.stringify(annsForBackend));
     try{
-      const headers={};if(getToken())headers['Authorization']='Bearer '+getToken();
-      const r=await fetch(`${API}/contribute`,{method:'POST',headers,body:fd});
+      const r=await authFetch(`${API}/contribute`,{method:'POST',body:fd});
       const d=await r.json();if(d.success){successCount++;window._sessionContribs=(window._sessionContribs||0)+1;}
     }catch(e){console.warn('Failed',i,e);}
   }
