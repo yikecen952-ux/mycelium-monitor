@@ -654,6 +654,9 @@ select:focus { outline: none; border-color: var(--green); }
             </div>
             <button class="btn-primary" id="btn-ov2" style="width:100%;font-size:12px;padding:8px" disabled>Run analysis</button>
             <div id="st-ov2" style="font-size:11px;color:var(--text-3);margin-top:6px;min-height:14px"></div>
+            <button id="btn-reupload-ov2" onclick="resetOv2Upload()" style="display:none;margin-top:8px;width:100%;font-size:11px;padding:7px;background:var(--bg);color:var(--text-2);border:1px solid var(--border);border-radius:var(--r);cursor:pointer;font-family:inherit">
+              ↑ Upload another photo
+            </button>
           </div>
           <!-- Result preview (small, inside upload card) -->
           <!-- Small original image preview only — result goes to right panel -->
@@ -2082,6 +2085,19 @@ function drawPolyOv(mouse){
   polyPointsOv.forEach((p,i)=>{polyCtxOv.beginPath();const r=Math.max(8,(i===0?16:10)*sc);polyCtxOv.arc(p.x,p.y,r,0,Math.PI*2);polyCtxOv.fillStyle=i===0?G:'#fff';polyCtxOv.strokeStyle=G;polyCtxOv.lineWidth=Math.max(3,4*sc);polyCtxOv.fill();polyCtxOv.stroke();});
 }
 function polyUndoOv(){if(polyClosedOv){polyClosedOv=false;}else{polyPointsOv.pop();}drawPolyOv();}
+function resetOv2Upload(){
+  // Reset left upload panel to initial state
+  polyPointsOv=[]; polyClosedOv=false; polyImgOv=null; polyListenersAddedOv=false;
+  document.getElementById('drop-ov2').style.display='block';
+  document.getElementById('poly-wrap-ov').style.display='none';
+  document.getElementById('poly-hint-ov').style.display='none';
+  document.getElementById('meta-fields-ov').style.display='none';
+  document.getElementById('ov2-preview-wrap').style.display='none';
+  document.getElementById('btn-ov2').disabled=true;
+  document.getElementById('btn-reupload-ov2').style.display='none';
+  document.getElementById('st-ov2').textContent='';
+  document.getElementById('fi-ov2').value='';
+}
 function polyClearOv(){polyPointsOv=[];polyClosedOv=false;drawPolyOv();}
 function polyCloseOv(){if(polyPointsOv.length<3)return;polyClosedOv=true;drawPolyOv();}
 const btnOv2=document.getElementById('btn-ov2');
@@ -2106,7 +2122,7 @@ if(btnOv2) btnOv2.addEventListener('click',async function(){
       previewWrap.style.display = 'block';
     }
     // RIGHT panel: show YOLO annotated result image + metadata
-    document.getElementById('ov-result-wrap').innerHTML=`<img src="data:image/jpeg;base64,${d.result_image}">`;
+    document.getElementById('ov-result-wrap').innerHTML=`<img src="data:image/jpeg;base64,${d.result_image}" style="width:100%;max-height:520px;object-fit:contain;display:block;border-radius:var(--r)">`;
     const detListEl = document.getElementById('ov-det-list');
     if(detListEl) detListEl.innerHTML=`
       <div class="det-row"><span class="det-key">State</span>${badge(d.yolo_state)}</div>
@@ -2114,6 +2130,9 @@ if(btnOv2) btnOv2.addEventListener('click',async function(){
       <div class="det-row"><span class="det-key">Detections</span><span>${d.total_detections}</span></div>
       ${d.detections.map(x=>`<div class="det-row" style="padding-left:12px"><span class="det-key" style="color:var(--text-3)">↳ ${stateLabel(x.class_name)}</span><span class="det-conf">${x.confidence}%</span></div>`).join('')}`;
     st.textContent='Analysis complete · '+(new Date().toLocaleTimeString());st.style.color='var(--green)';
+    // Show "Upload new photo" button so user can analyse another image
+    const reuploadBtn = document.getElementById('btn-reupload-ov2');
+    if(reuploadBtn) reuploadBtn.style.display='block';
     loadData();loadSamples();
   } catch(e){st.textContent='Error: '+e.message;st.style.color='var(--red)';}
   finally{this.disabled=false;this.textContent='Run analysis';}

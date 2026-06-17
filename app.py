@@ -456,7 +456,7 @@ def detect():
     save_path = os.path.join(UPLOAD_FOLDER, filename)
     file.save(save_path)
 
-    results = model(save_path, conf=0.15)
+    results = model(save_path, conf=0.1)  # Low threshold for small dataset
     result  = results[0]
 
     result_filename = f"result_{os.path.splitext(filename)[0]}.jpg"
