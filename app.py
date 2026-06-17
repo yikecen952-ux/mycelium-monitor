@@ -382,7 +382,8 @@ def try_compute_delta_realtime(sample_id, user_id, conn):
 
 @app.route("/", methods=["GET"])
 def index():
-    return jsonify({"status": "ok", "message": "SYMBIO-FRAME backend running 🍄"})
+    from flask import send_from_directory
+    return send_from_directory(".", "dashboard_v3.html")
 
 
 # ── Detect ────────────────────────────────────────────────────────────────────
