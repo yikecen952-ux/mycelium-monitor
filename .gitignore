@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Database — will be created fresh on server
+mycelium.db
+
+# Uploaded images — too large for git
+uploads/*
+!uploads/.gitkeep
+
+# Personal data files
+mycelium_observation_sheet.csv
+log_surface.csv
+log_env.csv
+
+# Model files — too large for git (we'll handle separately)
+yolo11n.pt
+
+# Old files
+record_sensor.py
+test.html

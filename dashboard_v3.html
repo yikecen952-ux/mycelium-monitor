@@ -1,0 +1,2382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mycelium Health Monitor · RC7 · Bartlett UCL</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root {
+  --bg:        #F8F8F6;
+  --surface:   #FFFFFF;
+  --border:    #E8E8E8;
+  --border2:   #D4D4D0;
+  --text:      #1A1A1A;
+  --text-2:    #6B6B6B;
+  --text-3:    #ADADAD;
+  --green:     #4A7C59;
+  --green-bg:  #EBF3EE;
+  --amber:     #C07A2A;
+  --amber-bg:  #FBF0E2;
+  --red:       #8B3A2A;
+  --red-bg:    #FAEAE6;
+  --blue:      #3A6080;
+  --blue-bg:   #E4EDF5;
+  --brown:     #7A5C3A;
+  --brown-bg:  #F5EDE2;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+  --shadow:    0 2px 8px rgba(0,0,0,0.08);
+  --r:         8px;
+  --r-lg:      12px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ── Auth overlay — modal style ── */
+#auth-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.35);
+  backdrop-filter: blur(3px);
+  z-index: 999;
+  display: flex; align-items: center; justify-content: center;
+}
+.auth-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 40px 48px;
+  width: 380px;
+  box-shadow: var(--shadow);
+}
+.auth-logo {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 28px;
+}
+.auth-title { font-size: 20px; font-weight: 600; color: var(--text); }
+.auth-sub   { font-size: 13px; color: var(--text-2); margin-top: 2px; }
+.auth-tabs  { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+.auth-tab {
+  font-size: 13px; font-weight: 500; padding: 8px 0; margin-right: 20px;
+  color: var(--text-2); cursor: pointer;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.auth-tab.active { color: var(--text); border-bottom-color: var(--text); }
+.auth-field { margin-bottom: 14px; }
+.auth-field label { font-size: 11px; font-weight: 600; color: var(--text-2); display: block; margin-bottom: 5px; }
+.auth-field input {
+  width: 100%; font-size: 13px; padding: 9px 12px;
+  border: 1px solid var(--border); border-radius: var(--r);
+  background: var(--surface); color: var(--text); font-family: inherit;
+}
+.auth-field input:focus { outline: none; border-color: var(--green); }
+.auth-err { font-size: 12px; color: var(--red); margin-top: 8px; min-height: 16px; }
+.btn-auth {
+  width: 100%; padding: 10px; font-size: 13px; font-weight: 600;
+  background: var(--text); color: #fff; border: none; border-radius: var(--r);
+  cursor: pointer; font-family: inherit; margin-top: 4px;
+}
+.btn-auth:hover { opacity: 0.85; }
+
+/* ── User pill in topbar ── */
+.user-pill {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: var(--text-2); cursor: pointer;
+}
+.user-avatar {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--green-bg); color: var(--green);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; flex-shrink: 0;
+}
+.user-menu {
+  position: absolute; top: 50px; right: 32px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); box-shadow: var(--shadow);
+  min-width: 160px; z-index: 200; display: none;
+}
+.user-menu.open { display: block; }
+.user-menu-item {
+  padding: 10px 16px; font-size: 13px; color: var(--text-2);
+  cursor: pointer; border-bottom: 1px solid var(--border);
+}
+.user-menu-item:last-child { border-bottom: none; }
+.user-menu-item:hover { background: var(--bg); color: var(--text); }
+
+/* ── Leaflet map container ── */
+#contrib-leaflet-map {
+  width: 100%; height: 220px;
+  border-radius: var(--r);
+  border: 1px solid var(--border);
+  z-index: 1;
+}
+.leaflet-container { border-radius: var(--r); }
+
+/* ── CSV upload area ── */
+.csv-upload-row {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px;
+}
+.csv-drop {
+  border: 1.5px dashed var(--border2); border-radius: var(--r);
+  padding: 14px 12px; text-align: center; cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.csv-drop:hover, .csv-drop.over { background: var(--bg); border-color: var(--green); }
+.csv-drop-label { font-size: 11px; font-weight: 600; color: var(--text-2); margin-bottom: 4px; }
+.csv-drop-sub   { font-size: 10px; color: var(--text-3); }
+
+/* ── Topbar ── */
+.topbar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 32px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.topbar-left { display: flex; align-items: center; gap: 12px; }
+.topbar-logo {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  border: 1.5px solid var(--green);
+  display: flex; align-items: center; justify-content: center;
+}
+.logo-inner {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--green);
+}
+.topbar-name { font-size: 14px; font-weight: 600; color: var(--text); }
+.topbar-sub  { font-size: 12px; color: var(--text-2); margin-top: 1px; }
+.live-pill {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--green-bg);
+  border: 1px solid #C4DECE;
+  border-radius: 99px;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: var(--green);
+}
+.live-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--green); flex-shrink: 0;
+}
+
+/* ── Nav ── */
+.nav {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 32px;
+  display: flex; gap: 0;
+}
+.tab {
+  font-size: 13px; font-weight: 500;
+  padding: 13px 20px 13px 0;
+  color: var(--text-2);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 0.15s;
+}
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--text); border-bottom-color: var(--text); }
+
+/* ── Page / main ── */
+.page { display: none; }
+.page.active { display: block; }
+.main { padding: 28px 32px; max-width: 1400px; margin: 0 auto; }
+
+/* ── Cards ── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 20px 24px;
+  box-shadow: var(--shadow-sm);
+}
+.card-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-bottom: 12px;
+}
+.card-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+/* ── Grid ── */
+.g3   { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.g2   { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.g21  { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 16px; }
+.g12  { display: grid; grid-template-columns: 1fr 2fr; gap: 16px; margin-bottom: 16px; }
+.g121 { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+
+/* ── Big number ── */
+.big-num {
+  font-size: 48px; font-weight: 300;
+  color: var(--text); line-height: 1;
+  letter-spacing: -1px;
+}
+.big-unit { font-size: 16px; color: var(--text-2); margin-left: 4px; }
+.num-meta { font-size: 12px; color: var(--text-3); margin-top: 6px; }
+
+/* ── Divider ── */
+.rule { width: 100%; height: 1px; background: var(--border); margin: 16px 0; }
+
+/* ── Readings ── */
+.reading {
+  display: flex; align-items: baseline;
+  justify-content: space-between;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.reading:last-child { border-bottom: none; }
+.r-label { color: var(--text-2); }
+.r-val   { font-weight: 600; color: var(--text); }
+.r-unit  { font-size: 11px; color: var(--text-3); margin-left: 2px; font-weight: 400; }
+
+/* ── Score bars ── */
+.bar-track {
+  display: flex; align-items: flex-end; gap: 4px;
+  height: 44px; margin: 12px 0 4px;
+}
+.sbar {
+  flex: 1; border-radius: 3px 3px 0 0;
+  background: var(--border);
+  transition: height 0.3s;
+}
+.sbar.ok   { background: var(--green); }
+.sbar.warn { background: var(--amber); }
+.sbar.bad  { background: var(--red); }
+.bar-labels {
+  display: flex; justify-content: space-between;
+  font-size: 10px; color: var(--text-3);
+}
+
+/* ── Badges ── */
+.badge {
+  display: inline-flex; align-items: center;
+  font-size: 11px; font-weight: 600;
+  padding: 3px 10px; border-radius: 99px;
+  white-space: nowrap;
+}
+.b-healthy    { background: var(--green-bg);  color: var(--green); }
+.b-aging      { background: var(--amber-bg);  color: var(--amber); }
+.b-contam     { background: var(--red-bg);    color: var(--red); }
+.b-substrate  { background: var(--brown-bg);  color: var(--brown); }
+.b-wet        { background: var(--blue-bg);   color: var(--blue); }
+.b-unknown    { background: var(--bg);        color: var(--text-2); border: 1px solid var(--border); }
+
+/* ── Alerts ── */
+.alert {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.alert:last-child { border-bottom: none; }
+.a-dot { width: 7px; height: 7px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+.a-dot.ok     { background: var(--green); }
+.a-dot.warn   { background: var(--amber); }
+.a-dot.danger { background: var(--red); }
+.a-dot.info   { background: var(--blue); }
+.a-title { font-size: 13px; font-weight: 500; color: var(--text); }
+.a-meta  { font-size: 12px; color: var(--text-2); margin-top: 2px; }
+
+/* ── Timeline ── */
+.tl-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+}
+.tl-cell {
+  border-radius: var(--r);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  overflow: hidden;
+  cursor: pointer;
+  transition: box-shadow 0.15s, border-color 0.15s;
+  box-shadow: var(--shadow-sm);
+}
+.tl-cell:hover { box-shadow: var(--shadow); border-color: var(--border2); }
+.tl-img { aspect-ratio: 1; background: var(--bg); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.tl-img img { width: 100%; height: 100%; object-fit: cover; }
+.tl-placeholder { font-size: 20px; color: var(--text-3); }
+.tl-bar { height: 3px; }
+.tl-bar.healthy      { background: var(--green); }
+.tl-bar.dry_aging    { background: var(--amber); }
+.tl-bar.contaminated { background: var(--red); }
+.tl-bar.unknown      { background: var(--border); }
+.tl-info { padding: 6px 8px; }
+.tl-date  { font-size: 10px; font-weight: 600; color: var(--text-2); }
+.tl-state { font-size: 10px; color: var(--text-3); margin-top: 1px; }
+
+/* ── Compare ── */
+.cmp-split { display: grid; grid-template-columns: 1fr 1px 1fr; gap: 20px; }
+.cmp-rule { background: var(--border); }
+.cmp-tag   { font-size: 11px; font-weight: 600; color: var(--text-3); letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 10px; }
+.cmp-score { font-size: 52px; font-weight: 200; line-height: 1; color: var(--text); letter-spacing: -2px; }
+.cmp-score.pending { color: var(--border2); }
+.cmp-delta { font-size: 13px; color: var(--text-2); margin-top: 6px; }
+.cmp-notes { font-size: 12px; color: var(--text-3); margin-top: 12px; line-height: 1.8; }
+
+/* ── Upload ── */
+.drop-zone {
+  border: 1.5px dashed var(--border2);
+  border-radius: var(--r);
+  padding: 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.drop-zone:hover, .drop-zone.over {
+  background: var(--bg);
+  border-color: var(--green);
+}
+.drop-icon { font-size: 24px; color: var(--text-3); margin-bottom: 8px; }
+.drop-text { font-size: 13px; color: var(--text-2); }
+.drop-sub  { font-size: 11px; color: var(--text-3); margin-top: 4px; }
+input[type="file"] { display: none; }
+
+/* ── Canvas crop area ── */
+.crop-wrap {
+  position: relative; display: none;
+  border-radius: var(--r);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  background: #000;
+  margin-top: 12px;
+}
+.crop-wrap canvas { display: block; width: 100%; cursor: crosshair; }
+.crop-hint {
+  font-size: 11px; color: var(--text-3);
+  text-align: center; margin-top: 6px;
+}
+
+/* ── Grid overlay result ── */
+.grid-result-wrap {
+  display: none; margin-top: 12px;
+  border-radius: var(--r);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.grid-result-wrap canvas { display: block; width: 100%; }
+
+/* ── Meta fields ── */
+.meta-fields {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+  margin-top: 12px; display: none;
+}
+.field-group { display: flex; flex-direction: column; gap: 4px; }
+.field-label { font-size: 11px; font-weight: 600; color: var(--text-2); }
+.field-input {
+  font-size: 13px; padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+}
+.field-input:focus { outline: none; border-color: var(--green); }
+
+select {
+  width: 100%; margin-top: 10px;
+  font-size: 13px; padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--surface);
+  color: var(--text);
+  appearance: none; cursor: pointer;
+  font-family: inherit;
+}
+select:focus { outline: none; border-color: var(--green); }
+
+/* ── Buttons ── */
+.btn-primary {
+  width: 100%; margin-top: 10px;
+  font-size: 13px; font-weight: 600; padding: 10px;
+  background: var(--text); color: #fff;
+  border: none; cursor: pointer;
+  border-radius: var(--r);
+  transition: opacity 0.15s; font-family: inherit;
+}
+.btn-primary:hover   { opacity: 0.85; }
+.btn-primary:disabled{ opacity: 0.3; cursor: not-allowed; }
+.btn-secondary {
+  font-size: 12px; font-weight: 500; padding: 8px 16px;
+  background: var(--bg); color: var(--text);
+  border: 1px solid var(--border); cursor: pointer;
+  border-radius: var(--r);
+  transition: background 0.15s; font-family: inherit;
+}
+.btn-secondary:hover { background: var(--border); }
+
+/* ── Sensor trigger ── */
+.sensor-trigger-btn {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; font-weight: 600; padding: 9px 16px;
+  background: var(--green-bg); color: var(--green);
+  border: 1px solid #C4DECE; cursor: pointer;
+  border-radius: var(--r); font-family: inherit;
+  transition: background 0.15s; width: 100%; margin-top: 8px;
+  justify-content: center;
+}
+.sensor-trigger-btn:hover { background: #D8EEDE; }
+.sensor-trigger-btn.running { background: var(--amber-bg); color: var(--amber); border-color: #E8C898; }
+.sensor-progress {
+  height: 3px; border-radius: 2px;
+  background: var(--border); margin-top: 8px; overflow: hidden; display: none;
+}
+.sensor-progress-fill {
+  height: 100%; background: var(--green); width: 0%;
+  transition: width 0.5s linear; border-radius: 2px;
+}
+
+/* ── Detection result ── */
+.det-result { margin-top: 12px; display: none; }
+.det-result img { width: 100%; border-radius: var(--r); border: 1px solid var(--border); }
+.det-row {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 13px; padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+}
+.det-row:last-child { border-bottom: none; }
+.det-key { color: var(--text-2); }
+.det-conf { font-size: 11px; color: var(--text-3); }
+
+/* ── Status msg ── */
+.st-msg { font-size: 12px; color: var(--text-3); margin-top: 8px; min-height: 16px; }
+.st-msg.err { color: var(--red); }
+.st-msg.ok  { color: var(--green); }
+
+/* ── Prediction panel ── */
+.pred-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+.pred-card {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 16px;
+  text-align: center;
+  transition: background 0.3s, border-color 0.3s;
+}
+.pred-period { font-size: 11px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+.pred-score { font-size: 36px; font-weight: 200; color: var(--text); letter-spacing: -1px; }
+.pred-label { font-size: 12px; color: var(--text-2); margin-top: 4px; }
+.pred-note  { font-size: 11px; color: var(--text-3); margin-top: 6px; line-height: 1.5; }
+
+
+
+/* ── Chart ── */
+.chart-wrap { position: relative; }
+
+/* ── Table ── */
+.data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.data-table th { text-align: left; padding: 8px 0 10px; color: var(--text-2); font-weight: 600; font-size: 11px; border-bottom: 1px solid var(--border); }
+.data-table td { padding: 8px 0; border-bottom: 1px solid var(--border); color: var(--text-2); }
+.data-table td:first-child { color: var(--text); font-weight: 500; }
+.data-table tr:last-child td { border-bottom: none; }
+</style>
+</head>
+<body>
+
+<!-- Auth Modal (soft — dismissible for guests) -->
+<div id="auth-overlay" style="display:none">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <div class="topbar-logo"><div class="logo-inner"></div></div>
+      <div>
+        <div class="auth-title">Mycelium Health Monitor</div>
+        <div class="auth-sub">RC7 · Bartlett School of Architecture · UCL</div>
+      </div>
+    </div>
+    <!-- Guest notice -->
+    <div id="auth-guest-note" style="display:none;background:var(--amber-bg);border-radius:var(--r);padding:10px 12px;margin-bottom:16px;font-size:12px;color:var(--amber);line-height:1.5">
+      Sign in to upload and analyse your own mycelium samples. You can still browse and contribute as a guest.
+    </div>
+    <div class="auth-tabs">
+      <div class="auth-tab active" onclick="switchAuthTab('login',this)">Sign in</div>
+      <div class="auth-tab" onclick="switchAuthTab('register',this)">Create account</div>
+    </div>
+    <div id="auth-login">
+      <div class="auth-field"><label>Username</label><input id="login-user" type="text" placeholder="Your username" autocomplete="username"></div>
+      <div class="auth-field"><label>Password</label><input id="login-pass" type="password" placeholder="Password" autocomplete="current-password"></div>
+      <div class="auth-err" id="login-err"></div>
+      <button class="btn-auth" onclick="doLogin()">Sign in</button>
+    </div>
+    <div id="auth-register" style="display:none">
+      <div class="auth-field"><label>Username</label><input id="reg-user" type="text" placeholder="Choose a username" autocomplete="username"></div>
+      <div class="auth-field"><label>Password</label><input id="reg-pass" type="password" placeholder="At least 6 characters" autocomplete="new-password"></div>
+      <div class="auth-err" id="reg-err"></div>
+      <button class="btn-auth" onclick="doRegister()">Create account</button>
+    </div>
+    <!-- Note when triggered from upload gate -->
+    <div id="auth-guest-note" style="display:none;margin-top:12px;padding:10px 12px;background:var(--amber-bg);border-radius:var(--r);font-size:12px;color:var(--amber)">
+      Sign in to upload photos and track your own samples.
+    </div>
+
+    <!-- Guest option -->
+    <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);text-align:center">
+      <div style="font-size:11px;color:var(--text-3);margin-bottom:10px">Just want to explore or contribute annotations?</div>
+      <button onclick="continueAsGuest()" style="width:100%;padding:9px;font-size:12px;font-weight:500;background:var(--bg);color:var(--text-2);border:1px solid var(--border);border-radius:var(--r);cursor:pointer;font-family:inherit">
+        Continue without account →
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Topbar -->
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="topbar-logo"><div class="logo-inner"></div></div>
+    <div>
+      <div class="topbar-name">Mycelium Health Monitor</div>
+      <div class="topbar-sub">RC7 · Bartlett School of Architecture · UCL</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px">
+    <div class="live-pill">
+      <div class="live-dot" id="live-dot"></div>
+      <span id="live-text">Connecting…</span>
+    </div>
+    <div class="user-pill" onclick="isGuest() ? showAuthModal(false) : toggleUserMenu()">
+      <div class="user-avatar" id="user-avatar">?</div>
+      <span id="user-display-name" style="font-size:12px;color:var(--text-2)">—</span>
+    </div>
+  </div>
+</div>
+<div class="user-menu" id="user-menu">
+  <div class="user-menu-item" id="admin-link" style="display:none;color:var(--green);font-weight:600" onclick="showAdminPanel()">⚙ Admin panel</div>
+  <div class="user-menu-item" onclick="copyToken()">Copy auth token</div>
+  <div class="user-menu-item" onclick="doLogout()" style="color:var(--red)">Sign out</div>
+</div>
+
+<!-- Nav -->
+<div class="nav">
+  <div class="tab active" onclick="showTab('overview',this)">Overview</div>
+  <div class="tab" onclick="showTab('timeline',this)">Timeline</div>
+  <div class="tab" onclick="showTab('sensor',this)">Sensor data</div>
+  <div class="tab" onclick="showTab('contribute',this)">Contribute</div>
+</div>
+
+<!-- ══ OVERVIEW ══ -->
+<div id="page-overview" class="page active">
+<div class="main">
+
+  <!-- Row 1: Image result | Score | Sensor + Alerts -->
+  <div class="g121">
+
+    <!-- Left: Last YOLO result -->
+    <div class="card">
+      <div class="card-label">Last analysis result</div>
+      <div id="ov-result-wrap">
+        <div style="aspect-ratio:1;background:var(--bg);border-radius:var(--r);display:flex;align-items:center;justify-content:center;color:var(--text-3);font-size:13px;">No image yet</div>
+      </div>
+      <div style="margin-top:12px" id="ov-det-list"></div>
+    </div>
+
+    <!-- Middle: Score + Prediction + Weather (unified) -->
+    <div style="display:flex;flex-direction:column;gap:16px">
+
+      <!-- Health score card -->
+      <div class="card">
+        <div class="card-label">Health score</div>
+        <div class="big-num" id="score-num">—<span class="big-unit">/ 100</span></div>
+        <div class="num-meta" id="score-meta">Awaiting observation</div>
+        <div class="rule"></div>
+        <div class="card-label">Score trend</div>
+        <div class="bar-track" id="bar-track">
+          <div class="sbar" style="height:40%"></div>
+        </div>
+        <div class="bar-labels" id="bar-labels"><span>—</span></div>
+      </div>
+
+      <!-- Prediction + Weather unified card -->
+      <div class="card" id="pred-card-wrapper">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <div class="card-label" style="margin-bottom:0">Health prediction</div>
+          <div id="pred-weather-badge" style="display:none;font-size:10px;padding:3px 10px;border-radius:99px;background:var(--blue-bg);color:var(--blue);font-weight:600">📡 weather-adjusted</div>
+        </div>
+
+        <!-- Weather fetch — triggers prediction update -->
+        <div style="background:var(--bg);border-radius:var(--r);padding:10px 12px;margin-bottom:14px;border:1px solid var(--border)">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <div style="font-size:11px;font-weight:600;color:var(--text-2)">Local weather <span style="color:var(--text-3);font-weight:400">· required for prediction</span></div>
+            <button onclick="fetchWeather()" id="weather-btn"
+              style="font-size:11px;padding:4px 11px;background:var(--surface);color:var(--green);border:1px solid #C4DECE;border-radius:var(--r);cursor:pointer;font-family:inherit;font-weight:600">
+              📍 Get location
+            </button>
+          </div>
+          <div id="weather-panel" style="display:none">
+            <div style="display:flex;gap:12px;flex-wrap:wrap">
+              <span style="font-size:12px;color:var(--text)" id="w-temp-inline">—</span>
+              <span style="font-size:12px;color:var(--text-2)" id="w-hum-inline">—</span>
+              <span style="font-size:12px;color:var(--text-2)" id="w-desc-inline">—</span>
+              <span style="font-size:11px;color:var(--text-3)" id="w-loc-inline">—</span>
+            </div>
+          </div>
+          <div id="weather-st" style="font-size:10px;color:var(--text-3);margin-top:2px">Fetch your location to enable weather-adjusted predictions.</div>
+        </div>
+
+        <!-- Sensor precision note -->
+        <div id="sensor-precision-note" style="display:none;background:var(--green-bg);border-radius:var(--r);padding:8px 12px;margin-bottom:14px;font-size:11px;color:var(--green);line-height:1.5">
+          📡 <strong>Precision mode:</strong> This sample has <span id="sensor-reading-count">0</span>/3 sensor readings — <span id="sensor-precision-status">collect 3 readings for enhanced accuracy</span>
+        </div>
+
+        <!-- Prediction grid -->
+        <div class="pred-grid">
+          <div class="pred-card" id="pred-today-card">
+            <div class="pred-period">Now</div>
+            <div class="pred-score" id="pred-now">—</div>
+            <div class="pred-label" id="pred-now-l">No data</div>
+            <div class="pred-note" id="pred-now-weather" style="margin-top:6px;font-size:10px;color:var(--text-3)"></div>
+          </div>
+          <div class="pred-card" id="pred-3d-card">
+            <div class="pred-period">3 days</div>
+            <div class="pred-score" id="pred-3d">—</div>
+            <div class="pred-label" id="pred-3d-l">No data</div>
+            <div class="pred-note" id="pred-3d-weather" style="margin-top:6px;font-size:10px;color:var(--text-3)"></div>
+          </div>
+          <div class="pred-card" id="pred-1w-card">
+            <div class="pred-period">7 days</div>
+            <div class="pred-score" id="pred-1w">—</div>
+            <div class="pred-label" id="pred-1w-l">No data</div>
+            <div class="pred-note" id="pred-1w-weather" style="margin-top:6px;font-size:10px;color:var(--text-3)"></div>
+          </div>
+        </div>
+        <div class="pred-note" id="pred-note" style="margin-top:10px;text-align:center;font-size:11px;color:var(--text-3)">Fetch location to activate weather-adjusted predictions.</div>
+      </div>
+    </div>
+
+    <!-- Right: Sensor + Alerts -->
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <div class="card-label" style="margin-bottom:0">Sensor readings</div>
+          <button class="sensor-trigger-btn" id="sensor-btn" onclick="triggerSensor()" style="width:auto;margin-top:0">
+            ⬤ Start 1-min reading
+          </button>
+        </div>
+        <div class="sensor-progress"><div class="sensor-progress-fill" id="sensor-prog"></div></div>
+        <div class="st-msg" id="sensor-st"></div>
+        <div class="reading"><span class="r-label">Temperature</span><span class="r-val" id="r-temp">—<span class="r-unit">°C</span></span></div>
+        <div class="reading"><span class="r-label">Surface humidity · COM7</span><span class="r-val" id="r-surf">—<span class="r-unit">%</span></span></div>
+        <div class="reading"><span class="r-label">Environment humidity · COM4</span><span class="r-val" id="r-env">—<span class="r-unit">%</span></span></div>
+        <div class="reading"><span class="r-label">Δ humidity</span><span class="r-val" id="r-delta">—<span class="r-unit">%</span></span></div>
+        <div class="reading"><span class="r-label">Pressure</span><span class="r-val" id="r-pres">—<span class="r-unit">hPa</span></span></div>
+
+        <!-- 1-min sensor reading note -->
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+          <div style="font-size:11px;color:var(--text-3);line-height:1.6">
+            After 3 consecutive 1-min readings for a sample, health prediction switches to <strong style="color:var(--text-2)">precision mode</strong> with sensor-calibrated accuracy.
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-label">Alerts & observations</div>
+        <div id="alert-list"><div class="st-msg">Loading…</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Row 2: Timeline full width -->
+  <div class="card" style="margin-bottom:16px">
+    <div style="margin-bottom:14px">
+      <div class="card-label" style="margin-bottom:0">Sample timeline · recent observations</div>
+    </div>
+    <div class="tl-grid" id="tl-strip"></div>
+  </div>
+
+  <!-- Row 2b: Inline Upload & Analyse -->
+  <div class="card" style="margin-bottom:16px" id="ov-upload-section">
+    <div style="margin-bottom:18px">
+      <div class="card-label" style="margin-bottom:4px">Upload & Analyse</div>
+      <div style="font-size:13px;color:var(--text-2)">Upload a new observation photo and run YOLO analysis directly from the overview.</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:20px;align-items:start">
+
+      <!-- Left: upload zone + meta -->
+      <div>
+        <label class="drop-zone" id="drop-ov2" for="fi-ov2" style="display:block;cursor:pointer;padding:20px">
+          <div class="drop-icon">↑</div>
+          <div class="drop-text">Drop photo or click to select</div>
+          <div class="drop-sub">JPG · PNG · HEIC</div>
+        </label>
+        <input type="file" id="fi-ov2" accept="image/*" style="display:none">
+
+        <!-- Polygon canvas for OV upload -->
+        <div id="poly-wrap-ov" style="display:none;margin-top:0;border-radius:var(--r);overflow:hidden;border:1px solid var(--border);position:relative">
+          <canvas id="poly-canvas-ov" style="display:block;width:100%;cursor:crosshair"></canvas>
+          <div style="position:absolute;bottom:8px;left:8px;right:8px;display:flex;gap:6px">
+            <button onclick="polyUndoOv()" class="btn-secondary" style="flex:1;font-size:11px;padding:5px">↩ Undo</button>
+            <button onclick="polyClearOv()" class="btn-secondary" style="flex:1;font-size:11px;padding:5px">✕ Clear</button>
+            <button onclick="polyCloseOv()" class="btn-secondary" style="flex:1;font-size:11px;padding:5px;background:var(--green);color:#fff;border-color:var(--green)">✓ Close</button>
+          </div>
+        </div>
+        <div id="poly-hint-ov" style="font-size:11px;color:var(--text-3);margin-top:6px;text-align:center;display:none">
+          Click to add points · close shape to confirm selection
+        </div>
+
+        <div id="meta-fields-ov" style="display:none;margin-top:12px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+            <div>
+              <div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:4px">Date</div>
+              <input type="date" id="obs-date-ov" class="field-input" style="width:100%;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-family:inherit">
+            </div>
+            <div>
+              <div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:4px">Time</div>
+              <input type="time" id="obs-time-ov" class="field-input" style="width:100%;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-family:inherit">
+            </div>
+          </div>
+          <div>
+            <div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:4px">Sample</div>
+            <select id="sel-ov2" style="width:100%;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);appearance:none;font-family:inherit">
+              <option value="MYC-A1">MYC-A1</option>
+              <option value="MYC-A2">MYC-A2</option>
+              <option value="MYC-B">MYC-B</option>
+              <option value="WOOD-1">WOOD-1</option>
+              <option value="__new__">+ Create new…</option>
+            </select>
+            <div id="new-sample-row-ov2" style="display:none;margin-top:8px">
+              <input id="new-sample-input-ov2" type="text" placeholder="e.g. MYC-C"
+                style="width:100%;font-size:13px;padding:8px 10px;border:1px solid var(--green);border-radius:var(--r);background:var(--surface);color:var(--text);font-family:inherit;outline:none">
+            </div>
+          </div>
+          <button class="btn-primary" id="btn-ov2" style="margin-top:10px;width:100%" disabled>Run analysis</button>
+          <div id="st-ov2" style="font-size:12px;color:var(--text-3);margin-top:8px;min-height:16px"></div>
+        </div>
+      </div>
+
+      <!-- Right: result display -->
+      <div>
+        <div id="ov2-empty" style="aspect-ratio:4/3;background:var(--bg);border-radius:var(--r);display:flex;align-items:center;justify-content:center;color:var(--text-3);font-size:13px;border:1px solid var(--border)">
+          Upload a photo to begin analysis
+        </div>
+        <div id="ov2-result-img-wrap" style="display:none">
+          <canvas id="ov2-result-canvas" style="display:block;width:100%;border-radius:var(--r);border:1px solid var(--border)"></canvas>
+        </div>
+        <div id="ov2-det-result" style="display:none;margin-top:14px">
+          <div class="card-label" style="margin-bottom:8px">Detection summary</div>
+          <div id="ov2-dlist"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Row 3: Community contribution panel -->
+  <div class="card" style="margin-bottom:16px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start">
+
+      <!-- Left: text + CTA -->
+      <div>
+        <div class="card-label">Help us build a better model</div>
+        <div style="font-size:22px;font-weight:600;color:var(--text);margin-bottom:10px;line-height:1.3">
+          Contribute your mycelium observations
+        </div>
+        <div style="font-size:14px;color:var(--text-2);line-height:1.7;margin-bottom:16px">
+          This detection model improves with every new image it learns from.
+          If you are working with mycelium — whether in a lab, studio, or field setting —
+          your photos can help train a more accurate, more diverse model.
+          Upload a specimen photo, draw regions, and label what you see.
+          It takes less than two minutes.
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px">
+          <div style="text-align:center">
+            <div style="font-size:32px;font-weight:300;color:var(--green)" id="ov-contrib-total">—</div>
+            <div style="font-size:11px;color:var(--text-3);margin-top:2px">contributors</div>
+          </div>
+          <div style="width:1px;height:40px;background:var(--border)"></div>
+          <div style="text-align:center">
+            <div style="font-size:32px;font-weight:300;color:var(--text)" id="ov-contrib-locs">—</div>
+            <div style="font-size:11px;color:var(--text-3);margin-top:2px">locations worldwide</div>
+          </div>
+        </div>
+        <button onclick="showTab('contribute',document.querySelector('.tab:nth-child(5)'))"
+          style="font-size:13px;font-weight:600;padding:11px 24px;background:var(--green);color:#fff;border:none;border-radius:var(--r);cursor:pointer;transition:opacity .15s"
+          onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+          Contribute an observation →
+        </button>
+      </div>
+
+      <!-- Right: Leaflet world map -->
+      <div>
+        <div id="contrib-leaflet-map"></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px">
+          <div style="font-size:10px;color:var(--text-3)">© OpenStreetMap contributors</div>
+          <div style="font-size:11px;color:var(--text-3)">
+            <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--text-3);margin-right:3px"></span>
+            Unknown location: <strong id="unknown-count" style="color:var(--text-2)">—</strong>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+
+
+</div>
+</div>
+
+<!-- ══ TIMELINE ══ -->
+<div id="page-timeline" class="page">
+<div class="main">
+  <!-- Sample filter tabs -->
+  <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap" id="sample-tabs"></div>
+  <!-- Per-sample timeline rows -->
+  <div id="sample-timelines"></div>
+  <!-- Overall trend chart -->
+  <div class="card" style="margin-top:16px">
+    <div class="card-label">Health score over time — <span id="trend-sample-label">all samples</span></div>
+    <div class="chart-wrap" style="height:200px">
+      <canvas id="trend-chart"></canvas>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ══ SENSOR DATA ══ -->
+<div id="page-sensor" class="page">
+<div class="main">
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-label">Humidity · surface vs environment vs delta</div>
+    <div class="chart-wrap" style="height:220px">
+      <canvas id="env-chart"></canvas>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-label">Session records</div>
+    <table class="data-table">
+      <thead><tr><th>Date</th><th>Sample</th><th>Temp</th><th>Surface hum</th><th>Env hum</th><th>Δ hum</th><th>Score</th></tr></thead>
+      <tbody id="sensor-tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- CSV Upload -->
+  <div class="card" style="margin-top:16px">
+    <div class="card-label">Import sensor CSV</div>
+    <div style="font-size:13px;color:var(--text-2);margin-bottom:14px;line-height:1.6">
+      Upload your <code style="font-size:12px;background:var(--bg);padding:2px 6px;border-radius:4px">log_surface.csv</code> and
+      <code style="font-size:12px;background:var(--bg);padding:2px 6px;border-radius:4px">log_env.csv</code> files to link sensor data to your observations.
+      The system will automatically match readings to observations by sample ID and date.
+    </div>
+    <div class="csv-upload-row">
+      <label class="csv-drop" id="drop-surface-csv" for="fi-surface-csv">
+        <div class="csv-drop-label">📊 Surface humidity</div>
+        <div class="csv-drop-sub">log_surface.csv</div>
+        <div id="surface-csv-name" style="margin-top:6px;font-size:10px;color:var(--green)"></div>
+      </label>
+      <input type="file" id="fi-surface-csv" accept=".csv" style="display:none">
+
+      <label class="csv-drop" id="drop-env-csv" for="fi-env-csv">
+        <div class="csv-drop-label">🌡 Environment humidity</div>
+        <div class="csv-drop-sub">log_env.csv</div>
+        <div id="env-csv-name" style="margin-top:6px;font-size:10px;color:var(--green)"></div>
+      </label>
+      <input type="file" id="fi-env-csv" accept=".csv" style="display:none">
+    </div>
+    <button class="btn-primary" id="btn-upload-csv" onclick="uploadCSVFiles()" style="margin-top:12px" disabled>
+      Import selected files
+    </button>
+    <div id="csv-upload-st" style="font-size:12px;color:var(--text-3);margin-top:8px;min-height:16px"></div>
+  </div>
+</div>
+</div>
+
+<!-- ══ UPLOAD & ANALYSE ══ -->
+<div id="page-upload" class="page">
+<div class="main">
+  <div class="g2">
+
+    <!-- Left: Upload + polygon selection + meta -->
+    <div class="card">
+      <div class="card-label">Upload observation</div>
+
+      <!-- Drop zone — hidden after image loads -->
+      <label class="drop-zone" id="drop-up" for="fi-up" style="display:block;cursor:pointer">
+        <div class="drop-icon">↑</div>
+        <div class="drop-text">Drop photo or click to select</div>
+        <div class="drop-sub">JPG · PNG · HEIC</div>
+      </label>
+      <input type="file" id="fi-up" accept="image/*" style="display:none">
+
+      <!-- Polygon canvas — shown after image loads -->
+      <div id="poly-wrap" style="display:none;margin-top:0;border-radius:var(--r);overflow:hidden;border:1px solid var(--border);position:relative">
+        <canvas id="poly-canvas" style="display:block;width:100%;cursor:crosshair"></canvas>
+        <div style="position:absolute;bottom:8px;left:8px;right:8px;display:flex;gap:6px">
+          <button onclick="polyUndo()" class="btn-secondary" style="flex:1;font-size:11px;padding:5px">↩ Undo point</button>
+          <button onclick="polyClear()" class="btn-secondary" style="flex:1;font-size:11px;padding:5px">✕ Clear</button>
+          <button onclick="polyClose()" class="btn-secondary" style="flex:1;font-size:11px;padding:5px;background:var(--green);color:#fff;border-color:var(--green)">✓ Close shape</button>
+        </div>
+      </div>
+
+      <div id="poly-hint" style="font-size:11px;color:var(--text-3);margin-top:6px;text-align:center;display:none">
+        Click to add points · Close shape to confirm selection · Leave empty to analyse full image
+      </div>
+
+      <!-- Meta fields — shown after image loads -->
+      <div id="meta-fields" style="display:none;margin-top:12px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div>
+            <div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:4px">Date</div>
+            <input type="date" id="obs-date" class="field-input" style="width:100%;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-family:inherit">
+          </div>
+          <div>
+            <div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:4px">Time</div>
+            <input type="time" id="obs-time" class="field-input" style="width:100%;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-family:inherit">
+          </div>
+        </div>
+        <div style="margin-top:10px">
+          <div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:4px">Sample</div>
+          <div style="display:flex;gap:8px">
+            <select id="sel-up" style="flex:1;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);appearance:none;font-family:inherit">
+              <option value="MYC-A1">MYC-A1</option>
+              <option value="MYC-A2">MYC-A2</option>
+              <option value="MYC-B">MYC-B</option>
+              <option value="WOOD-1">WOOD-1</option>
+              <option value="__new__">+ Create new…</option>
+            </select>
+          </div>
+          <div id="new-sample-row-up" style="display:none;margin-top:8px;display:none">
+            <input id="new-sample-input-up" type="text" placeholder="e.g. MYC-C or PANEL-01"
+              style="width:100%;font-size:13px;padding:8px 10px;border:1px solid var(--green);border-radius:var(--r);background:var(--surface);color:var(--text);font-family:inherit;outline:none">
+            <div style="font-size:10px;color:var(--text-3);margin-top:3px">Name will be saved to your dataset automatically</div>
+          </div>
+        </div>
+        <button class="btn-primary" id="btn-up" style="margin-top:10px;width:100%">Run analysis</button>
+        <div class="st-msg" id="st-up" style="margin-top:8px;font-size:12px;color:var(--text-3);min-height:16px"></div>
+      </div>
+    </div>
+
+    <!-- Right: Result -->
+    <div class="card">
+      <div class="card-label">Analysis result</div>
+      <div id="up-empty" style="aspect-ratio:4/3;background:var(--bg);border-radius:var(--r);display:flex;align-items:center;justify-content:center;color:var(--text-3);font-size:13px">Upload a photo to begin</div>
+      <div id="grid-result-wrap" style="display:none">
+        <canvas id="grid-result-canvas" style="display:block;width:100%;border-radius:var(--r);border:1px solid var(--border)"></canvas>
+      </div>
+      <div id="det-result-up" style="display:none;margin-top:14px">
+        <div class="card-label" style="margin-bottom:8px">Detection summary</div>
+        <div id="dlist-up"></div>
+        <div style="width:100%;height:1px;background:var(--border);margin:12px 0"></div>
+        <div class="card-label" style="margin-bottom:8px">Area coverage</div>
+        <div id="area-breakdown"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+<!-- ══ CONTRIBUTE ══ -->
+<div id="page-contribute" class="page">
+<div class="main" style="max-width:1100px">
+
+  <!-- Header -->
+  <div style="margin-bottom:24px">
+    <div style="font-size:22px;font-weight:600;color:var(--text);margin-bottom:6px">Contribute to the training dataset</div>
+    <div style="font-size:14px;color:var(--text-2);max-width:640px;line-height:1.6">
+      Help improve the mycelium detection model by uploading your own specimen photos and annotating the surface conditions.
+      Your contributions are reviewed and added to the YOLO training dataset.
+    </div>
+  </div>
+
+  <div class="g2" style="align-items:start">
+
+    <!-- Left: Upload + polygon annotator -->
+    <div style="display:flex;flex-direction:column;gap:14px">
+
+      <!-- Step 1: Upload queue -->
+      <div class="card" id="contrib-upload-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:24px;height:24px;border-radius:50%;background:var(--text);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0">1</div>
+            <div class="card-label" style="margin-bottom:0">Upload photos</div>
+          </div>
+          <!-- Queue counter badge -->
+          <div id="queue-badge" style="display:none;font-size:12px;font-weight:600;padding:4px 12px;border-radius:99px;background:var(--green-bg);color:var(--green);border:1px solid #C4DECE">
+            <span id="queue-current">1</span> / <span id="queue-total">1</span>
+          </div>
+        </div>
+
+        <!-- Drop zone -->
+        <label class="drop-zone" for="fi-contrib" style="display:block;cursor:pointer" id="drop-contrib">
+          <div class="drop-icon">↑</div>
+          <div class="drop-text">Drop photos or click to select</div>
+          <div class="drop-sub">JPG · PNG · multiple files supported</div>
+        </label>
+        <input type="file" id="fi-contrib" accept="image/jpeg,image/png,image/webp" multiple style="display:none">
+
+        <!-- Queue thumbnail strip -->
+        <div id="queue-strip" style="display:none;margin-top:12px">
+          <div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:8px">Image queue — click to switch</div>
+          <div id="queue-thumbs" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+          <button onclick="addMoreImages()" style="margin-top:8px;font-size:11px;padding:5px 12px;background:var(--bg);color:var(--text-2);border:1px solid var(--border);border-radius:var(--r);cursor:pointer;font-family:inherit">+ Add more photos</button>
+        </div>
+      </div>
+
+      <!-- Step 2: Annotate (hidden until image loaded) -->
+      <div class="card" id="contrib-annotate-card" style="display:none">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+          <div style="width:24px;height:24px;border-radius:50%;background:var(--text);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0">2</div>
+          <div class="card-label" style="margin-bottom:0">Draw regions and label each area</div>
+        </div>
+
+        <!-- Label selector -->
+        <div style="margin-bottom:12px">
+          <div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:8px">Select label before drawing:</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap" id="contrib-label-btns">
+            <button onclick="setContribLabel('healthy_mycelium')"    class="contrib-label-btn" data-label="healthy_mycelium"    style="background:var(--green-bg);color:var(--green);border:1.5px solid var(--green)">Healthy</button>
+            <button onclick="setContribLabel('dry_aged_mycelium')"   class="contrib-label-btn" data-label="dry_aged_mycelium"   style="background:var(--amber-bg);color:var(--amber);border:1.5px solid transparent">Dry aging</button>
+            <button onclick="setContribLabel('contamination_risk')"  class="contrib-label-btn" data-label="contamination_risk"  style="background:var(--red-bg);color:var(--red);border:1.5px solid transparent">Contaminated</button>
+            <button onclick="setContribLabel('exposed_substrate')"   class="contrib-label-btn" data-label="exposed_substrate"   style="background:var(--brown-bg);color:var(--brown);border:1.5px solid transparent">Exposed substrate</button>
+          </div>
+        </div>
+
+        <!-- Canvas -->
+        <div style="border-radius:var(--r);overflow:hidden;border:1px solid var(--border);position:relative">
+          <canvas id="contrib-canvas" style="display:block;width:100%;cursor:crosshair"></canvas>
+          <div style="position:absolute;bottom:8px;left:8px;right:8px;display:flex;gap:6px">
+            <button onclick="contribUndo()"  class="btn-secondary" style="flex:1;font-size:11px;padding:5px">↩ Undo</button>
+            <button onclick="contribClear()" class="btn-secondary" style="flex:1;font-size:11px;padding:5px">✕ Clear region</button>
+            <button onclick="contribClose()" style="flex:1;font-size:11px;padding:5px;background:var(--green);color:#fff;border:none;border-radius:var(--r);cursor:pointer">✓ Save region</button>
+          </div>
+        </div>
+
+        <div id="contrib-hint" style="font-size:11px;color:var(--text-3);margin-top:6px;text-align:center">
+          Select a label above, then click to draw a polygon around that region.
+        </div>
+
+        <!-- Saved annotations list -->
+        <div id="contrib-ann-list" style="margin-top:12px;display:none">
+          <div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:8px">Saved regions:</div>
+          <div id="contrib-ann-items"></div>
+          <button onclick="contribClearAll()" class="btn-secondary" style="width:100%;margin-top:8px;font-size:11px">Clear all regions</button>
+        </div>
+      </div>
+
+      <!-- Step 3: Info + Submit (hidden until image loaded) -->
+      <div class="card" id="contrib-info-card" style="display:none">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+          <div style="width:24px;height:24px;border-radius:50%;background:var(--text);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0">3</div>
+          <div class="card-label" style="margin-bottom:0">Add details and submit</div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+          <div>
+            <div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:4px">Your name (optional)</div>
+            <input id="contrib-name" type="text" placeholder="e.g. Sarah Chen" style="width:100%;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-family:inherit">
+          </div>
+          <div>
+            <div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:4px">Location</div>
+            <div style="display:flex;gap:6px">
+              <input id="contrib-location" type="text" placeholder="Auto-detected or type manually"
+                style="flex:1;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-family:inherit">
+              <button onclick="autoLocateContrib()" id="btn-contrib-locate"
+                style="font-size:11px;font-weight:600;padding:8px 10px;background:var(--green-bg);color:var(--green);border:1px solid #C4DECE;border-radius:var(--r);cursor:pointer;font-family:inherit;white-space:nowrap">
+                📍 Locate
+              </button>
+            </div>
+            <div style="font-size:10px;color:var(--text-3);margin-top:3px">
+              Leave empty to submit as <em>unknown location</em> — still counted on the map.
+            </div>
+            <!-- Hidden lat/lng fields -->
+            <input type="hidden" id="contrib-lat">
+            <input type="hidden" id="contrib-lng">
+          </div>
+        </div>
+        <div style="margin-bottom:10px">
+          <div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:4px">Mycelium species / substrate (optional)</div>
+          <input id="contrib-type" type="text" placeholder="e.g. Ganoderma on oak sawdust" style="width:100%;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-family:inherit">
+        </div>
+        <div style="margin-bottom:14px">
+          <div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:4px">Notes (optional)</div>
+          <textarea id="contrib-notes" placeholder="Growing conditions, age, observations..." style="width:100%;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-family:inherit;resize:vertical;min-height:60px"></textarea>
+        </div>
+
+        <!-- Batch submit -->
+        <div style="display:flex;gap:8px">
+          <button class="btn-primary" id="contrib-submit-btn" onclick="submitAllContributions()" style="flex:2">
+            Submit <span id="submit-count-label">1 image</span>
+          </button>
+        </div>
+        <div id="contrib-st" style="font-size:12px;color:var(--text-3);margin-top:8px;min-height:16px"></div>
+
+        <!-- Achievement banner — shown after successful submission -->
+        <div id="contrib-achievement" style="display:none;margin-top:14px;border-radius:var(--r);background:linear-gradient(135deg,#EBF3EE 0%,#D8EEDE 100%);border:1px solid #C4DECE;padding:16px 18px">
+          <div style="display:flex;align-items:flex-start;gap:14px">
+            <div id="achieve-icon" style="font-size:28px;flex-shrink:0;line-height:1">🍄</div>
+            <div style="flex:1">
+              <div id="achieve-title" style="font-size:14px;font-weight:700;color:var(--green);margin-bottom:3px">Contribution received!</div>
+              <div id="achieve-desc" style="font-size:12px;color:var(--text-2);line-height:1.5"></div>
+              <div id="achieve-count" style="margin-top:8px;display:flex;align-items:center;gap:8px">
+                <div id="achieve-pip-row" style="display:flex;gap:4px"></div>
+                <span id="achieve-count-label" style="font-size:11px;color:var(--text-3)"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Right: Stats + How it works -->
+    <div style="display:flex;flex-direction:column;gap:14px">
+
+      <!-- Stats -->
+      <div class="card">
+        <div class="card-label">Dataset contributions</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+          <div style="text-align:center;padding:12px;background:var(--bg);border-radius:var(--r)">
+            <div style="font-size:32px;font-weight:300;color:var(--text)" id="cs-total">—</div>
+            <div style="font-size:11px;color:var(--text-3);margin-top:4px">Total contributions</div>
+          </div>
+          <div style="text-align:center;padding:12px;background:var(--bg);border-radius:var(--r)">
+            <div style="font-size:32px;font-weight:300;color:var(--green)" id="cs-uploaded">—</div>
+            <div style="font-size:11px;color:var(--text-3);margin-top:4px">Added to dataset</div>
+          </div>
+        </div>
+        <div class="card-label" style="margin-bottom:8px">Contribution locations</div>
+        <div id="cs-locations" style="font-size:12px;color:var(--text-2)">Loading…</div>
+        <div class="card-label" style="margin-bottom:8px;margin-top:14px">Recent contributions</div>
+        <div id="cs-recent"></div>
+      </div>
+
+      <!-- How it works — with label standards -->
+      <div class="card">
+        <div class="card-label">How it works</div>
+
+        <!-- Steps -->
+        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:18px">
+          <div style="display:flex;gap:10px;align-items:flex-start">
+            <div style="width:22px;height:22px;border-radius:50%;background:var(--green-bg);color:var(--green);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;margin-top:1px">1</div>
+            <div style="font-size:12px;color:var(--text-2)"><strong style="color:var(--text)">Upload</strong> any mycelium photo — growing, aging, or contaminated.</div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:flex-start">
+            <div style="width:22px;height:22px;border-radius:50%;background:var(--green-bg);color:var(--green);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;margin-top:1px">2</div>
+            <div style="font-size:12px;color:var(--text-2)"><strong style="color:var(--text)">Draw polygons</strong> around each surface region and assign a label.</div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:flex-start">
+            <div style="width:22px;height:22px;border-radius:50%;background:var(--green-bg);color:var(--green);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;margin-top:1px">3</div>
+            <div style="font-size:12px;color:var(--text-2)"><strong style="color:var(--text)">Submit</strong> — your image and annotations upload directly to the Roboflow training dataset.</div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:flex-start">
+            <div style="width:22px;height:22px;border-radius:50%;background:var(--amber-bg);color:var(--amber);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;margin-top:1px">4</div>
+            <div style="font-size:12px;color:var(--text-2)">The <strong style="color:var(--text)">YOLO model retrains</strong> on new data, becoming more accurate across species and environments.</div>
+          </div>
+        </div>
+
+        <!-- Label reference -->
+        <div style="border-top:1px solid var(--border);padding-top:14px">
+          <div style="font-size:11px;font-weight:700;color:var(--text-3);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:10px">Label reference</div>
+
+          <div style="display:flex;flex-direction:column;gap:10px">
+
+            <!-- Healthy -->
+            <div style="background:var(--green-bg);border-radius:var(--r);padding:10px 12px">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+                <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);flex-shrink:0"></span>
+                <span style="font-size:12px;font-weight:700;color:var(--green)">Healthy White Mycelium</span>
+              </div>
+              <div style="font-size:11px;color:var(--text-2);line-height:1.6;padding-left:16px">
+                White, continuous, relatively intact surface. Matte appearance, no discolouration, no patches of missing coverage.
+              </div>
+            </div>
+
+            <!-- Dry Aging -->
+            <div style="background:var(--amber-bg);border-radius:var(--r);padding:10px 12px">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+                <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--amber);flex-shrink:0"></span>
+                <span style="font-size:12px;font-weight:700;color:var(--amber)">Dry Aging</span>
+              </div>
+              <div style="font-size:11px;color:var(--text-2);line-height:1.6;padding-left:16px">
+                Grey-white or cream-yellow tone. Surface has begun to separate, powder, or harden. No longer continuous — partial shrinkage or cracking visible.
+              </div>
+            </div>
+
+            <!-- Exposed Substrate -->
+            <div style="background:var(--brown-bg);border-radius:var(--r);padding:10px 12px">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+                <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--brown);flex-shrink:0"></span>
+                <span style="font-size:12px;font-weight:700;color:var(--brown)">Exposed Substrate</span>
+              </div>
+              <div style="font-size:11px;color:var(--text-2);line-height:1.6;padding-left:16px">
+                Brown wood chips, fibres, or raw interior material visible through the mycelium layer. Mycelium coverage has receded and the substrate is no longer protected.
+              </div>
+            </div>
+
+            <!-- Contaminated -->
+            <div style="background:var(--red-bg);border-radius:var(--r);padding:10px 12px">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+                <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--red);flex-shrink:0"></span>
+                <span style="font-size:12px;font-weight:700;color:var(--red)">Contaminated / Infection Risk</span>
+              </div>
+              <div style="font-size:11px;color:var(--text-2);line-height:1.6;padding-left:16px">
+                Black spots, dark grey, brown-black, or abnormal discolouration. Irregular patches or localised mould growth present. Indicates active biological contamination.
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+const API = 'http://127.0.0.1:5000';
+let trendChart, envChart;
+window._records = [];
+
+/* ══════════════════════════════════════════════════════════════════
+   AUTH
+══════════════════════════════════════════════════════════════════ */
+function getToken()    { return localStorage.getItem('sf_token'); }
+function getUsername() { return localStorage.getItem('sf_username'); }
+function getIsAdmin()  { return localStorage.getItem('sf_is_admin') === 'true'; }
+
+function authHeaders() {
+  const t = getToken();
+  return t ? { 'Authorization': 'Bearer ' + t, 'Content-Type': 'application/json' } : {};
+}
+function authFetch(url, opts={}) {
+  opts.headers = Object.assign({}, authHeaders(), opts.headers || {});
+  return fetch(url, opts);
+}
+
+function switchAuthTab(tab, el) {
+  document.querySelectorAll('.auth-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('auth-login').style.display    = tab==='login'    ? 'block' : 'none';
+  document.getElementById('auth-register').style.display = tab==='register' ? 'block' : 'none';
+}
+
+async function doLogin() {
+  const username = document.getElementById('login-user').value.trim();
+  const password = document.getElementById('login-pass').value.trim();
+  const errEl    = document.getElementById('login-err');
+  errEl.textContent = '';
+  if (!username || !password) { errEl.textContent = 'Please fill in both fields.'; return; }
+  try {
+    const r = await fetch(`${API}/auth/login`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({username, password})
+    });
+    const d = await r.json();
+    if (!d.success) { errEl.textContent = d.error || 'Login failed'; return; }
+    saveSession(d);
+  } catch(e) { errEl.textContent = 'Cannot reach server.'; }
+}
+
+async function doRegister() {
+  const username = document.getElementById('reg-user').value.trim();
+  const password = document.getElementById('reg-pass').value.trim();
+  const errEl    = document.getElementById('reg-err');
+  errEl.textContent = '';
+  if (!username || !password) { errEl.textContent = 'Please fill in both fields.'; return; }
+  try {
+    const r = await fetch(`${API}/auth/register`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({username, password})
+    });
+    const d = await r.json();
+    if (!d.success) { errEl.textContent = d.error || 'Registration failed'; return; }
+    saveSession(d);
+  } catch(e) { errEl.textContent = 'Cannot reach server.'; }
+}
+
+function saveSession(d) {
+  localStorage.setItem('sf_token',    d.token);
+  localStorage.setItem('sf_username', d.username);
+  localStorage.setItem('sf_is_admin', d.is_admin ? 'true' : 'false');
+  onLoggedIn();
+}
+
+function onLoggedIn() {
+  document.getElementById('auth-overlay').style.display = 'none';
+  const name = getUsername();
+  document.getElementById('user-display-name').textContent = name;
+  document.getElementById('user-avatar').textContent = (name[0]||'?').toUpperCase();
+  if (getIsAdmin()) {
+    document.getElementById('admin-link').style.display = 'block';
+  }
+  loadData();
+  loadContribStats();
+  loadSamples();
+  handleSampleSelect('sel-up','new-sample-input-up','new-sample-row-up');
+  handleSampleSelect('sel-ov2','new-sample-input-ov2','new-sample-row-ov2');
+}
+
+function doLogout() {
+  localStorage.removeItem('sf_token');
+  localStorage.removeItem('sf_username');
+  localStorage.removeItem('sf_is_admin');
+  location.reload();
+}
+
+function toggleUserMenu() {
+  if (isGuest()) { showAuthModal(false); return; }
+  document.getElementById('user-menu').classList.toggle('open');
+}
+document.addEventListener('click', e => {
+  const menu = document.getElementById('user-menu');
+  if (menu && !menu.contains(e.target) && !e.target.closest('.user-pill')) {
+    menu.classList.remove('open');
+  }
+});
+
+function copyToken() {
+  const t = getToken();
+  if (t) {
+    navigator.clipboard.writeText(t);
+    alert('Token copied to clipboard. Paste it into AUTH_TOKEN in your sensor script.');
+  }
+  document.getElementById('user-menu').classList.remove('open');
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+function showTab(name, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  el.classList.add('active');
+  if (name === 'timeline')  buildSampleTimelines();
+  if (name === 'sensor')    buildEnvChart();
+}
+
+// ── State helpers ─────────────────────────────────────────────────────────────
+const STATE_LABELS = {
+  healthy:'Healthy', healthy_mycelium:'Healthy',
+  dry_aging:'Dry aging', dry_aged_mycelium:'Dry aging', aging:'Dry aging',
+  contaminated:'Contaminated', contamination_risk:'Contaminated',
+  exposed_substrate:'Exposed substrate'
+};
+const STATE_BADGE = {
+  healthy:'b-healthy', healthy_mycelium:'b-healthy',
+  dry_aging:'b-aging', dry_aged_mycelium:'b-aging', aging:'b-aging',
+  contaminated:'b-contam', contamination_risk:'b-contam',
+  exposed_substrate:'b-substrate'
+};
+function stateLabel(s) { return STATE_LABELS[s] || (s||'Unknown'); }
+function badge(s) { return `<span class="badge ${STATE_BADGE[s]||'b-unknown'}">${stateLabel(s)}</span>`; }
+function barCls(sc) { return sc>=75?'ok':sc>=50?'warn':'bad'; }
+function tlBarCls(s) {
+  return (s==='healthy'||s==='healthy_mycelium') ? 'healthy'
+       : (s==='dry_aging'||s==='dry_aged_mycelium'||s==='aging') ? 'dry_aging'
+       : (s==='contaminated'||s==='contamination_risk') ? 'contaminated'
+       : 'unknown';
+}
+
+// ── Leaflet map ───────────────────────────────────────────────────────────────
+let _leafletMap = null;
+let _leafletMarkers = [];
+
+function initLeafletMap() {
+  if (_leafletMap) return;
+  _leafletMap = L.map('contrib-leaflet-map', {
+    center: [20, 0], zoom: 1.5,
+    zoomControl: true, scrollWheelZoom: false,
+    attributionControl: false
+  });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 18, opacity: 0.85
+  }).addTo(_leafletMap);
+}
+
+function updateLeafletMap(locations) {
+  initLeafletMap();
+  // Remove old markers
+  _leafletMarkers.forEach(m => _leafletMap.removeLayer(m));
+  _leafletMarkers = [];
+
+  locations.forEach(loc => {
+    if (!loc.lat || !loc.lng) return;
+    const size   = Math.min(8 + loc.count * 3, 22);
+    const marker = L.circleMarker([loc.lat, loc.lng], {
+      radius:      size / 2,
+      fillColor:   '#4A7C59',
+      color:       '#fff',
+      weight:      2,
+      opacity:     1,
+      fillOpacity: 0.85
+    }).addTo(_leafletMap);
+    marker.bindTooltip(
+      `<strong>${loc.location}</strong><br>${loc.count} contribution${loc.count>1?'s':''}`,
+      { direction: 'top', offset: [0, -4] }
+    );
+    _leafletMarkers.push(marker);
+  });
+}
+
+// ── buildTimeline ─────────────────────────────────────────────────────────────
+function buildTimeline(id, records, cols) {
+  const el = document.getElementById(id); if(!el) return;
+  if(cols) el.style.gridTemplateColumns = `repeat(${cols},1fr)`;
+  el.innerHTML = records.map(r=>{
+    const date = (r.timestamp||'').slice(5,10);
+    const time = (r.timestamp||'').slice(11,16);
+    const hasSensor = r.surface_humidity !== null && r.surface_humidity !== undefined;
+    const sc = r.health_score;
+    const scoreCol = sc!==null&&sc!==undefined ? (sc<60?'var(--red)':sc<75?'var(--amber)':'var(--green)') : 'var(--text-3)';
+    const imgEl = r.image_path
+      ? `<img src="${API}/image/${r.image_path}" style="width:100%;height:100%;object-fit:cover" loading="lazy" onerror="this.parentElement.innerHTML='<div class=tl-placeholder>○</div>'">`
+      : `<div class="tl-placeholder">○</div>`;
+    return `<div class="tl-cell" onclick="selectTimelineRecord(${r.id})" style="cursor:pointer" title="${date} ${time} · ${stateLabel(r.yolo_state)} · ${sc??'—'}pts">
+      <div class="tl-img">${imgEl}</div>
+      <div class="tl-bar ${tlBarCls(r.yolo_state)}"></div>
+      <div class="tl-info">
+        <div class="tl-date">${date} <span style="color:var(--text-3);font-weight:400">${time}</span></div>
+        <div class="tl-state">${stateLabel(r.yolo_state)}</div>
+        <div style="margin-top:2px;display:flex;gap:3px;align-items:center">
+          ${sc!==null&&sc!==undefined ? `<span style="font-size:9px;font-weight:700;color:${scoreCol}">▸${sc}</span>` : ''}
+          ${hasSensor ? '<span title="Sensor data" style="font-size:9px;color:var(--blue)">📡</span>' : ''}
+        </div>
+      </div>
+    </div>`;
+  }).join('') + `<div class="tl-cell" style="opacity:0.4"><div class="tl-img"><div class="tl-placeholder" style="font-size:18px">+</div></div><div class="tl-bar unknown"></div><div class="tl-info"><div class="tl-date">Next</div><div class="tl-state">Upload</div></div></div>`;
+}
+
+window._currentDisplayRecord = null;
+
+function selectTimelineRecord(recordId) {
+  const rec = (window._records||[]).find(r=>r.id===recordId);
+  if (!rec) return;
+  window._currentDisplayRecord = recordId;
+  const wrap = document.getElementById('ov-result-wrap');
+  if (rec.image_path) {
+    wrap.innerHTML = `<div style="position:relative">
+      <img src="${API}/image/${rec.image_path}" style="width:100%;border-radius:var(--r);border:1px solid var(--border)">
+      <div style="position:absolute;top:8px;left:8px;background:rgba(0,0,0,0.55);color:#fff;font-size:10px;font-weight:600;padding:3px 8px;border-radius:4px">${(rec.timestamp||'').slice(0,16)}</div>
+    </div>`;
+  }
+  const detListEl = document.getElementById('ov-det-list');
+  if (detListEl) {
+    const hs = rec.surface_humidity;
+    detListEl.innerHTML = `
+      <div class="det-row"><span class="det-key">State</span>${badge(rec.yolo_state)}</div>
+      <div class="det-row"><span class="det-key">Score</span><strong style="color:${(rec.health_score||0)<60?'var(--red)':(rec.health_score||0)<75?'var(--amber)':'var(--green)'}">${rec.health_score??'—'}</strong> / 100</div>
+      <div class="det-row"><span class="det-key">Sample</span><span>${rec.sample_id||'—'}</span></div>
+      ${hs!==null&&hs!==undefined ? `<div class="det-row"><span class="det-key">Δ humidity</span><span>${rec.delta_humidity??'—'} %</span></div>` : ''}
+      <button onclick="restoreLatestResult()" style="margin-top:10px;width:100%;font-size:11px;padding:6px;background:var(--bg);color:var(--text-2);border:1px solid var(--border);border-radius:var(--r);cursor:pointer;font-family:inherit">← Return to latest result</button>`;
+  }
+}
+
+function restoreLatestResult() {
+  window._currentDisplayRecord = null;
+  loadData();
+}
+
+// ── Weather ───────────────────────────────────────────────────────────────────
+const WMO_DESC = {0:'Clear sky',1:'Mainly clear',2:'Partly cloudy',3:'Overcast',
+  45:'Fog',48:'Icing fog',51:'Light drizzle',53:'Drizzle',55:'Heavy drizzle',
+  61:'Light rain',63:'Rain',65:'Heavy rain',71:'Light snow',73:'Snow',75:'Heavy snow',
+  80:'Rain showers',81:'Rain showers',82:'Heavy showers',
+  95:'Thunderstorm',96:'Thunderstorm + hail',99:'Thunderstorm + heavy hail'};
+
+function wmoIsRain(code) {
+  return [51,53,55,61,63,65,71,73,75,80,81,82,95,96,99].includes(code);
+}
+
+async function fetchWeather() {
+  const btn = document.getElementById('weather-btn');
+  const st  = document.getElementById('weather-st');
+  btn.textContent = '📍 Locating…'; btn.disabled = true;
+  if (!navigator.geolocation) { st.textContent='Geolocation not supported.'; btn.disabled=false; return; }
+  navigator.geolocation.getCurrentPosition(async pos=>{
+    const {latitude:lat, longitude:lon} = pos.coords;
+    try {
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
+        + `&current=temperature_2m,relative_humidity_2m,weather_code`
+        + `&daily=temperature_2m_max,temperature_2m_min,relative_humidity_2m_max,precipitation_sum,weather_code`
+        + `&forecast_days=4&timezone=auto`;
+      const r = await fetch(url); const d = await r.json();
+      const cur = d.current;
+      const desc = WMO_DESC[cur.weather_code] || `Code ${cur.weather_code}`;
+      const geoR = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`);
+      const geoD = await geoR.json();
+      const city    = geoD.address?.city||geoD.address?.town||geoD.address?.village||'';
+      const country = geoD.address?.country||'';
+      const locStr  = [city,country].filter(Boolean).join(', ')||`${lat.toFixed(2)},${lon.toFixed(2)}`;
+      const wPanel = document.getElementById('weather-panel');
+      if(wPanel) wPanel.style.display='block';
+      const set = (id,v)=>{ const e=document.getElementById(id); if(e) e.textContent=v; };
+      set('w-temp-inline', cur.temperature_2m+'°C');
+      set('w-hum-inline',  cur.relative_humidity_2m+'% humidity');
+      set('w-desc-inline', desc);
+      set('w-loc-inline',  locStr);
+      if(st) st.textContent='';
+      btn.textContent='📍 Refresh'; btn.disabled=false;
+      window._weatherLocation = locStr;
+      window._weatherLat = lat; window._weatherLng = lon;
+      window._weatherData = { temp:cur.temperature_2m, hum:cur.relative_humidity_2m, desc, code:cur.weather_code, lat, lon,
+        forecast: d.daily ? { dates:d.daily.time, tempMax:d.daily.temperature_2m_max, tempMin:d.daily.temperature_2m_min,
+          humMax:d.daily.relative_humidity_2m_max, precip:d.daily.precipitation_sum, codes:d.daily.weather_code } : null };
+      if(window._records&&window._records.length) buildPrediction(window._records);
+    } catch(e) {
+      if(st) st.textContent='Could not fetch weather: '+e.message;
+      btn.textContent='📍 Get location'; btn.disabled=false;
+    }
+  }, err=>{
+    const msgs={1:'Location permission denied.',2:'Position unavailable.',3:'Timeout.'};
+    if(st) st.textContent=msgs[err.code]||'Location error.';
+    btn.textContent='📍 Get location'; btn.disabled=false;
+  });
+}
+
+// ── Prediction ────────────────────────────────────────────────────────────────
+function buildPrediction(records) {
+  const r = records.filter(x=>x.health_score!==null&&x.health_score!==undefined);
+  const last = r[r.length-1];
+  const currentScore = last?last.health_score:null;
+
+  function weatherStressScore(tempMax,tempMin,hum,precipMm) {
+    let s=0; const mid=(tempMax+tempMin)/2;
+    if(mid>30)s+=8; else if(mid>25)s+=3; else if(mid<5)s+=12; else if(mid<10)s+=5;
+    if(hum>95)s+=6; else if(hum>90)s+=2; else if(hum<60)s+=8; else if(hum<70)s+=3;
+    if(precipMm>10)s+=10; else if(precipMm>3)s+=5; else if(precipMm>0.5)s+=2;
+    return s;
+  }
+  function scoreLabel(sc) {
+    if(sc>=80)return'Stable'; if(sc>=65)return'Minor decline';
+    if(sc>=50)return'Notable aging'; if(sc>=35)return'Significant decay';
+    if(sc>=20)return'Severe deterioration'; return'Critical — unusable';
+  }
+  function applyScoreStyle(cardId,scoreId,sc) {
+    const card=document.getElementById(cardId); const el=document.getElementById(scoreId);
+    if(!card||!el)return;
+    if(sc!==null&&sc<60){ card.style.background='var(--red-bg)'; card.style.borderColor='#E8C4BC'; el.style.color='var(--red)'; }
+    else if(sc!==null&&sc<70){ card.style.background='var(--amber-bg)'; card.style.borderColor='#E8C898'; el.style.color='var(--amber)'; }
+    else { card.style.background='var(--bg)'; card.style.borderColor='var(--border)'; el.style.color='var(--text)'; }
+  }
+  if(currentScore!==null){
+    document.getElementById('pred-now').textContent=currentScore;
+    document.getElementById('pred-now-l').textContent=scoreLabel(currentScore);
+    applyScoreStyle('pred-today-card','pred-now',currentScore);
+    const wd=window._weatherData;
+    if(wd){ const e=document.getElementById('pred-now-weather'); if(e) e.textContent=`${wd.temp}°C · ${wd.hum}% · ${wd.desc}`; }
+  }
+  if(r.length<3){ document.getElementById('pred-note').textContent='Need 3+ observations for trend prediction.'; return; }
+  const n=r.length; const s0=r[n-3].health_score,s1=r[n-2].health_score,s2=r[n-1].health_score;
+  const dailyDelta=(s1-s0)*0.35+(s2-s1)*0.65;
+  const wd=window._weatherData; const fc=wd&&wd.forecast;
+  function forecastScore(days) {
+    let sc=s2+dailyDelta*days;
+    if(fc){ let stress=0; for(let i=1;i<=Math.min(days,fc.dates.length-1);i++){ stress+=weatherStressScore(fc.tempMax[i],fc.tempMin[i],fc.humMax[i],fc.precip[i]); } sc-=stress*0.28; }
+    return Math.max(0,Math.min(100,Math.round(sc)));
+  }
+  const pred3d=forecastScore(3),pred7d=forecastScore(7);
+  function wxNote(i){ if(!fc||i>=fc.dates.length)return''; const t=Math.round((fc.tempMax[i]+fc.tempMin[i])/2); const parts=[`${t}°C`,`${fc.humMax[i]}% hum`]; if(fc.precip[i]>0.5)parts.push(`${fc.precip[i]}mm rain`); return parts.join(' · '); }
+  const setEl=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
+  setEl('pred-3d',pred3d); setEl('pred-3d-l',scoreLabel(pred3d)); setEl('pred-3d-weather',fc?wxNote(3):'');
+  setEl('pred-1w',pred7d); setEl('pred-1w-l',scoreLabel(pred7d)); setEl('pred-1w-weather',fc?'Forecast beyond 3 days':'');
+  applyScoreStyle('pred-3d-card','pred-3d',pred3d);
+  applyScoreStyle('pred-1w-card','pred-1w',pred7d);
+  const badge2=document.getElementById('pred-weather-badge'); if(badge2) badge2.style.display=fc?'inline-block':'none';
+  document.getElementById('pred-note').textContent = fc
+    ? `Based on ${r.length} observations + weather forecast. Baseline Δ: ${dailyDelta>=0?'+':''}${dailyDelta.toFixed(1)} pts/day.`
+    : `Based on ${r.length} observations. Get weather for forecast-adjusted predictions.`;
+}
+
+// ── Sensor precision ──────────────────────────────────────────────────────────
+function checkSensorPrecision(records) {
+  const last=records[records.length-1]; if(!last)return;
+  const sid=last.sample_id;
+  const withSensor=records.filter(r=>r.sample_id===sid&&r.surface_humidity!==null&&r.surface_humidity!==undefined);
+  const noteEl=document.getElementById('sensor-precision-note');
+  const countEl=document.getElementById('sensor-reading-count');
+  const statusEl=document.getElementById('sensor-precision-status');
+  if(!noteEl)return;
+  if(withSensor.length>0){
+    noteEl.style.display='block';
+    if(countEl) countEl.textContent=Math.min(withSensor.length,3);
+    if(statusEl){
+      if(withSensor.length>=3){ statusEl.textContent='precision mode active'; noteEl.style.background='var(--green-bg)'; noteEl.style.color='var(--green)'; }
+      else{ statusEl.textContent=`collect ${3-withSensor.length} more for enhanced accuracy`; noteEl.style.background='var(--amber-bg)'; noteEl.style.color='var(--amber)'; }
+    }
+  } else { noteEl.style.display='none'; }
+}
+
+// ── loadData ──────────────────────────────────────────────────────────────────
+async function loadData() {
+  try {
+    const res  = await authFetch(`${API}/history?limit=50`);
+    if(res.status===401){ return; } // Not logged in yet
+    const data = await res.json();
+    if(!data.records||!data.records.length){
+      document.getElementById('live-text').textContent='No data yet'; return;
+    }
+    const records=data.records; window._records=records;
+    const last=records[records.length-1];
+    document.getElementById('live-dot').style.background='var(--green)';
+    document.getElementById('live-text').textContent='Live · '+(last.timestamp||'').slice(5,16);
+    const sc=last.health_score;
+    document.getElementById('score-num').innerHTML=(sc??'—')+'<span class="big-unit">/ 100</span>';
+    document.getElementById('score-meta').textContent=(last.sample_id||'—')+' · '+(last.timestamp||'').slice(0,10);
+    const recent=records.slice(-7);
+    document.getElementById('bar-track').innerHTML=recent.map((r,i)=>{
+      const h=r.health_score?Math.max(8,r.health_score):12;
+      return `<div class="sbar ${i===recent.length-1?barCls(r.health_score||0):''}" style="height:${h}%"></div>`;
+    }).join('');
+    document.getElementById('bar-labels').innerHTML=recent.map(r=>`<span>${(r.timestamp||'').slice(5,10)}</span>`).join('');
+    const d=last.delta_humidity;
+    const set=(id,v)=>{const e=document.getElementById(id);if(e)e.innerHTML=v;};
+    set('r-temp',(last.temp_c??'—')+'<span class="r-unit">°C</span>');
+    set('r-surf',(last.surface_humidity??'—')+'<span class="r-unit">%</span>');
+    set('r-env',(last.env_humidity??'—')+'<span class="r-unit">%</span>');
+    set('r-pres','—<span class="r-unit">hPa</span>');
+    set('r-delta',(d!==null&&d!==undefined?(d>0?'+':'')+d:'—')+'<span class="r-unit">%</span>');
+    if(!window._currentDisplayRecord){
+      if(last.image_path){
+        document.getElementById('ov-result-wrap').innerHTML=`<img src="${API}/image/${last.image_path}" style="width:100%;border-radius:var(--r);border:1px solid var(--border)">`;
+      }
+      const detListEl=document.getElementById('ov-det-list');
+      if(detListEl) detListEl.innerHTML=`
+        <div class="det-row"><span class="det-key">State</span>${badge(last.yolo_state)}</div>
+        <div class="det-row"><span class="det-key">Score</span><strong>${last.health_score??'—'}</strong> / 100</div>
+        <div class="det-row"><span class="det-key">Sample</span>${last.sample_id||'—'}</div>`;
+    }
+    buildAlerts(records,last,d);
+    buildTimeline('tl-strip',records.slice(-7));
+    buildPrediction(records);
+    checkSensorPrecision(records);
+    const pilot=records.filter(r=>r.model_type==='pilot');
+    const main=records.filter(r=>r.model_type==='main');
+    if(pilot.length>1){
+      const lp=pilot[pilot.length-1].health_score;
+      const cmpEl=document.getElementById('cmp-decay'); if(cmpEl) cmpEl.textContent=lp??'—';
+    }
+    if(main.length){
+      const lm=main[main.length-1].health_score;
+      const cmpEl=document.getElementById('cmp-tended'); if(cmpEl){ cmpEl.textContent=lm??'—'; cmpEl.classList.remove('pending'); }
+    }
+    document.getElementById('sensor-tbody').innerHTML=records.slice().reverse().slice(0,20).map(r=>`
+      <tr><td>${(r.timestamp||'').slice(0,10)}</td><td>${r.sample_id||'—'}</td>
+      <td>${r.temp_c??'—'}${r.temp_c?'°C':''}</td>
+      <td>${r.surface_humidity??'—'}${r.surface_humidity?'%':''}</td>
+      <td>${r.env_humidity??'—'}${r.env_humidity?'%':''}</td>
+      <td>${d!==null&&d!==undefined?(d>0?'+':'')+d+'%':'—'}</td>
+      <td>${r.health_score??'—'}</td></tr>`).join('');
+  } catch(e){
+    document.getElementById('live-text').textContent='Backend offline';
+    document.getElementById('live-dot').style.background='var(--border2)';
+  }
+}
+
+function buildAlerts(records,last,delta){
+  const alerts=[];
+  if(last.yolo_state==='contaminated'||last.yolo_state==='contamination_risk')
+    alerts.push({t:'danger',ti:'Contamination detected',m:`Sample ${last.sample_id} — immediate inspection advised`});
+  if(last.yolo_state==='dry_aging'||last.yolo_state==='dry_aged_mycelium'||last.yolo_state==='aging')
+    alerts.push({t:'warn',ti:'Aging detected',m:`Sample ${last.sample_id} — consider rehydration`});
+  if(delta!==null&&delta!==undefined&&delta<-15)
+    alerts.push({t:'warn',ti:'Surface drying',m:`Δ humidity ${delta}% — surface losing moisture`});
+  const r3=records.slice(-3).map(r=>r.health_score).filter(v=>v!==null&&v!==undefined);
+  if(r3.length===3&&r3[2]<r3[1]&&r3[1]<r3[0]) alerts.push({t:'warn',ti:'Declining trend',m:'Score dropped 3 consecutive observations'});
+  if(!alerts.length) alerts.push({t:'ok',ti:'All readings within range',m:'No intervention required'});
+  const el=document.getElementById('alert-list');
+  if(el) el.innerHTML=alerts.map(a=>`<div class="alert"><div class="a-dot ${a.t}"></div><div><div class="a-title">${a.ti}</div><div class="a-meta">${a.m}</div></div></div>`).join('');
+}
+
+// ── Sensor trigger ────────────────────────────────────────────────────────────
+let sensorTimer=null;
+async function triggerSensor(){
+  const btn=document.getElementById('sensor-btn');
+  const st=document.getElementById('sensor-st');
+  const prog=document.getElementById('sensor-prog');
+  const progWrap=prog.parentElement;
+  if(sensorTimer){ clearInterval(sensorTimer); btn.classList.remove('running'); btn.textContent='⬤ Start 1-min reading'; progWrap.style.display='none'; st.textContent=''; sensorTimer=null; return; }
+  btn.classList.add('running'); btn.textContent='◼ Stop reading';
+  progWrap.style.display='block'; prog.style.width='0%';
+  st.textContent='Reading sensor data… 60 seconds'; st.className='st-msg';
+  let elapsed=0;
+  sensorTimer=setInterval(()=>{
+    elapsed+=1; prog.style.width=(elapsed/60*100)+'%'; st.textContent=`Reading… ${60-elapsed}s remaining`;
+    if(elapsed>=60){ clearInterval(sensorTimer); sensorTimer=null; btn.classList.remove('running'); btn.textContent='⬤ Start 1-min reading'; st.textContent='Reading complete. Updating data…'; st.className='st-msg ok'; progWrap.style.display='none'; setTimeout(()=>{ loadData(); st.textContent=''; },2000); }
+  },1000);
+}
+
+// ── Charts ────────────────────────────────────────────────────────────────────
+const CO={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:10},color:'var(--text-3)'},grid:{color:'rgba(0,0,0,0.04)'}},y:{ticks:{font:{size:10},color:'var(--text-3)'},grid:{color:'rgba(0,0,0,0.04)'}}}};
+let activeSample='all';
+
+function buildSampleTimelines() {
+  const records=window._records; if(!records||!records.length)return;
+  const samples=['all',...new Set(records.map(r=>r.sample_id).filter(Boolean))];
+  const tabsEl=document.getElementById('sample-tabs');
+  if(tabsEl) tabsEl.innerHTML=samples.map(s=>`<button onclick="filterSample('${s}')" id="stab-${s}"
+    style="font-size:12px;font-weight:500;padding:6px 14px;border-radius:99px;border:1px solid var(--border);
+           background:${s===activeSample?'var(--text)':'var(--surface)'};
+           color:${s===activeSample?'#fff':'var(--text-2)'};cursor:pointer;font-family:inherit;transition:all .15s">
+    ${s==='all'?'All samples':s}</button>`).join('');
+  const container=document.getElementById('sample-timelines');
+  const sampleIds=samples.filter(s=>s!=='all');
+  const filtered=activeSample==='all'?sampleIds:[activeSample];
+  if(container) container.innerHTML=filtered.map(sid=>{
+    const recs=records.filter(r=>r.sample_id===sid); if(!recs.length)return'';
+    const cells=recs.map(r=>{
+      const date=(r.timestamp||'').slice(5,10); const time=(r.timestamp||'').slice(11,16);
+      const state=r.yolo_state||'unknown'; const score=r.health_score??'—';
+      const hasSensor=r.surface_humidity!==null&&r.surface_humidity!==undefined;
+      const scoreCol=score!=='—'?(score<60?'var(--red)':score<75?'var(--amber)':'var(--green)'):'var(--text-3)';
+      const imgEl=r.image_path
+        ?`<img src="${API}/image/${r.image_path}" style="width:100%;height:100%;object-fit:cover" loading="lazy" onerror="this.parentElement.innerHTML='<div class=tl-placeholder style=font-size:16px>○</div>'">`
+        :`<div class="tl-placeholder" style="font-size:16px">○</div>`;
+      return`<div class="tl-cell" onclick="selectTimelineRecord(${r.id})" style="cursor:pointer" title="${date} ${time} · ${stateLabel(state)} · ${score}pts">
+        <div class="tl-img">${imgEl}</div>
+        <div class="tl-bar ${tlBarCls(state)}"></div>
+        <div class="tl-info">
+          <div class="tl-date">${date} <span style="color:var(--text-3);font-weight:400">${time}</span></div>
+          <div class="tl-state">${stateLabel(state)}</div>
+          <div style="margin-top:2px;display:flex;gap:3px;align-items:center">
+            ${score!=='—'?`<span style="font-size:9px;font-weight:700;color:${scoreCol}">▸${score}</span>`:''}
+            ${hasSensor?'<span title="Sensor data" style="font-size:9px;color:var(--blue)">📡</span>':''}
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+    return`<div class="card" style="margin-bottom:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div class="card-label" style="margin-bottom:0">${sid}</div>
+        <span style="font-size:11px;color:var(--text-3)">${recs.length} observations · latest ${(recs[recs.length-1].timestamp||'').slice(0,10)}</span>
+      </div>
+      <div class="tl-grid" style="grid-template-columns:repeat(${Math.min(recs.length+1,10)},1fr)">${cells}
+        <div class="tl-cell" style="opacity:0.4"><div class="tl-img"><div class="tl-placeholder" style="font-size:18px">+</div></div><div class="tl-bar unknown"></div><div class="tl-info"><div class="tl-date">Next</div><div class="tl-state">Upload</div></div></div>
+      </div>
+    </div>`;
+  }).join('');
+  buildTrendChart();
+}
+
+function filterSample(s){activeSample=s;buildSampleTimelines();}
+
+function buildTrendChart(){
+  const all=window._records||[];
+  const r=activeSample==='all'?all:all.filter(x=>x.sample_id===activeSample);
+  if(!r.length)return;
+  const el=document.getElementById('trend-sample-label'); if(el) el.textContent=activeSample==='all'?'all samples':activeSample;
+  if(trendChart)trendChart.destroy();
+  trendChart=new Chart(document.getElementById('trend-chart'),{type:'line',data:{labels:r.map(x=>(x.timestamp||'').slice(5,10)),datasets:[{data:r.map(x=>x.health_score),borderColor:'#4A7C59',borderWidth:2,pointRadius:3,pointBackgroundColor:'#4A7C59',fill:false,tension:0.35}]},options:{...CO,scales:{...CO.scales,y:{...CO.scales.y,min:0,max:100}}}});
+}
+
+function buildEnvChart(){
+  const r=(window._records||[]).filter(x=>x.delta_humidity!==null&&x.delta_humidity!==undefined);
+  if(!r.length)return;
+  if(envChart)envChart.destroy();
+  envChart=new Chart(document.getElementById('env-chart'),{type:'line',data:{labels:r.map(x=>(x.timestamp||'').slice(5,10)),datasets:[{label:'Surface %',data:r.map(x=>x.surface_humidity),borderColor:'#4A7C59',borderWidth:1.5,pointRadius:2,fill:false,tension:0.35},{label:'Env %',data:r.map(x=>x.env_humidity),borderColor:'#ADADAD',borderWidth:1,pointRadius:2,fill:false,tension:0.35,borderDash:[4,3]},{label:'Δ %',data:r.map(x=>x.delta_humidity),borderColor:'#C07A2A',borderWidth:1.5,pointRadius:2,fill:false,tension:0.35}]},options:{...CO,plugins:{legend:{display:true,labels:{font:{size:10},color:'var(--text-2)',boxWidth:16}}}}});
+}
+
+// ── Sample selector ───────────────────────────────────────────────────────────
+async function loadSamples(){
+  try {
+    const r=await authFetch(`${API}/samples`); if(!r.ok)return;
+    const d=await r.json();
+    const defaults=['MYC-A1','MYC-A2','MYC-B','WOOD-1'];
+    const all=[...new Set([...defaults,...(d.samples||[])])];
+    ['sel-up','sel-ov2'].forEach(id=>{
+      const el=document.getElementById(id); if(!el)return;
+      const cur=el.value;
+      el.innerHTML=all.map(s=>`<option value="${s}">${s}</option>`).join('')+'<option value="__new__">+ Create new…</option>';
+      if(cur&&cur!=='__new__') el.value=cur;
+    });
+  } catch(e){}
+}
+
+function handleSampleSelect(selId,newInputId,newRowId){
+  const sel=document.getElementById(selId); const row=document.getElementById(newRowId);
+  if(!sel||!row)return;
+  sel.addEventListener('change',()=>{ row.style.display=sel.value==='__new__'?'block':'none'; });
+}
+
+function getSelectedSampleId(selId,newInputId){
+  const sel=document.getElementById(selId); if(!sel)return'SAMPLE-1';
+  if(sel.value==='__new__'){ const inp=document.getElementById(newInputId); return((inp&&inp.value.trim())||'NEW').toUpperCase().replace(/\s+/g,'-'); }
+  return sel.value;
+}
+
+// ── CSV upload ────────────────────────────────────────────────────────────────
+let _csvFiles = { surface: null, env: null };
+
+function setupCSVDropzone(dropId, inputId, type) {
+  const drop  = document.getElementById(dropId);
+  const input = document.getElementById(inputId);
+  if(!drop||!input)return;
+  drop.addEventListener('dragover', e=>{ e.preventDefault(); drop.classList.add('over'); });
+  drop.addEventListener('dragleave', ()=>drop.classList.remove('over'));
+  drop.addEventListener('drop', e=>{ e.preventDefault(); drop.classList.remove('over'); if(e.dataTransfer.files[0]) setCSVFile(e.dataTransfer.files[0],type); });
+  input.addEventListener('change', function(){ if(this.files[0]) setCSVFile(this.files[0],type); });
+}
+
+function setCSVFile(file, type) {
+  _csvFiles[type] = file;
+  const nameEl = document.getElementById(`${type}-csv-name`);
+  if(nameEl) nameEl.textContent = file.name;
+  const btn = document.getElementById('btn-upload-csv');
+  if(btn) btn.disabled = !_csvFiles.surface && !_csvFiles.env;
+  // Enable if at least one file is set
+  if(btn) btn.disabled = false;
+}
+
+async function uploadCSVFiles() {
+  const btn = document.getElementById('btn-upload-csv');
+  const st  = document.getElementById('csv-upload-st');
+  btn.disabled=true; btn.textContent='Uploading…';
+  st.textContent=''; st.style.color='var(--text-3)';
+  const results = [];
+  for (const [type, file] of Object.entries(_csvFiles)) {
+    if (!file) continue;
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('csv_type', type);
+    try {
+      const r = await authFetch(`${API}/upload-csv`, { method:'POST', headers:{Authorization:'Bearer '+getToken()}, body:fd });
+      // Override Content-Type (let browser set multipart boundary)
+      const d = await r.json();
+      if(d.success) results.push(`${type}: ${d.inserted} rows imported`);
+      else results.push(`${type}: ${d.error}`);
+    } catch(e) { results.push(`${type}: failed`); }
+  }
+  st.textContent = results.join(' · ') || 'No files selected';
+  st.style.color = 'var(--green)';
+  btn.disabled=false; btn.textContent='Import selected files';
+  _csvFiles = {surface:null,env:null};
+  document.getElementById('surface-csv-name').textContent='';
+  document.getElementById('env-csv-name').textContent='';
+}
+
+// ── Contribute auto-locate ────────────────────────────────────────────────────
+async function autoLocateContrib() {
+  const btn = document.getElementById('btn-contrib-locate');
+  btn.textContent='Locating…'; btn.disabled=true;
+  if(!navigator.geolocation){ btn.textContent='📍 Locate'; btn.disabled=false; return; }
+  navigator.geolocation.getCurrentPosition(async pos=>{
+    const {latitude:lat,longitude:lon}=pos.coords;
+    try {
+      const r=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`);
+      const d=await r.json();
+      const city=d.address?.city||d.address?.town||d.address?.village||'';
+      const country=d.address?.country||'';
+      const loc=[city,country].filter(Boolean).join(', ')||`${lat.toFixed(2)},${lon.toFixed(2)}`;
+      const locField=document.getElementById('contrib-location');
+      if(locField) locField.value=loc;
+      const latField=document.getElementById('contrib-lat');
+      const lngField=document.getElementById('contrib-lng');
+      if(latField) latField.value=lat;
+      if(lngField) lngField.value=lon;
+      btn.textContent='📍 Located ✓'; btn.disabled=false;
+    } catch(e){ btn.textContent='📍 Locate'; btn.disabled=false; }
+  }, ()=>{ btn.textContent='📍 Locate'; btn.disabled=false; });
+}
+
+// ── Contribution stats + Leaflet map ─────────────────────────────────────────
+async function loadContribStats(){
+  try {
+    const r=await fetch(`${API}/contributions/stats`); const d=await r.json();
+    const setT=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
+    setT('cs-total',d.total??'0'); setT('cs-uploaded',d.uploaded??'0');
+    setT('ov-contrib-total',d.total??'0'); setT('ov-contrib-locs',d.locations.length??'0');
+    setT('unknown-count',d.unknown??'0');
+    const csLoc=document.getElementById('cs-locations');
+    if(csLoc) csLoc.innerHTML=d.locations.length
+      ?d.locations.map(l=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:12px"><span>${l.location}</span><span style="color:var(--text-3)">${l.count}</span></div>`).join('')
+      :'<div style="font-size:12px;color:var(--text-3)">No contributions yet</div>';
+    const csRecent=document.getElementById('cs-recent');
+    if(csRecent) csRecent.innerHTML=d.recent.length
+      ?d.recent.map(r=>`<div style="font-size:11px;color:var(--text-2);padding:4px 0;border-bottom:1px solid var(--border)">${r.contributor||'Anonymous'} · ${r.location||'unknown'} · <span style="color:var(--text-3)">${(r.timestamp||'').slice(0,10)}</span></div>`).join('')
+      :'<div style="font-size:12px;color:var(--text-3)">No recent contributions</div>';
+    // Update Leaflet map
+    updateLeafletMap(d.locations);
+  } catch(e){
+    const el=document.getElementById('cs-locations'); if(el) el.textContent='Backend offline';
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// POLYGON SELECTION — Upload page
+// ══════════════════════════════════════════════════════════════════════════════
+let polyCanvas,polyCtx,polyImg,polyPoints=[],polyClosed=false,polyListenersAdded=false;
+const fiUp=document.getElementById('fi-up');
+const dropUp=document.getElementById('drop-up');
+if(fiUp) fiUp.addEventListener('change',function(){ if(this.files[0]) initPoly(this.files[0]); });
+if(dropUp){
+  dropUp.addEventListener('dragover',e=>{e.preventDefault();dropUp.classList.add('over');});
+  dropUp.addEventListener('dragleave',()=>dropUp.classList.remove('over'));
+  dropUp.addEventListener('drop',e=>{e.preventDefault();dropUp.classList.remove('over');if(e.dataTransfer.files[0]) initPoly(e.dataTransfer.files[0]);});
+}
+function initPoly(file){
+  polyImg=new Image(); polyImg._file=file;
+  polyImg.onload=function(){
+    document.getElementById('drop-up').style.display='none';
+    const wrap=document.getElementById('poly-wrap'); wrap.style.display='block';
+    polyCanvas=document.getElementById('poly-canvas'); polyCanvas.width=polyImg.naturalWidth; polyCanvas.height=polyImg.naturalHeight;
+    polyCtx=polyCanvas.getContext('2d'); polyPoints=[]; polyClosed=false; drawPoly();
+    document.getElementById('poly-hint').style.display='block';
+    document.getElementById('meta-fields').style.display='block';
+    document.getElementById('up-empty').style.display='none';
+    const now=new Date();
+    document.getElementById('obs-date').value=now.toISOString().slice(0,10);
+    document.getElementById('obs-time').value=now.toTimeString().slice(0,5);
+    document.getElementById('btn-up').disabled=false;
+    if(!polyListenersAdded){addPolyListeners();polyListenersAdded=true;}
+  };
+  const reader=new FileReader(); reader.onload=e=>{polyImg.src=e.target.result;}; reader.readAsDataURL(file);
+}
+function getPolyPos(e){
+  const r=polyCanvas.getBoundingClientRect(); const sx=polyCanvas.width/r.width; const sy=polyCanvas.height/r.height;
+  return{x:(e.clientX-r.left)*sx,y:(e.clientY-r.top)*sy};
+}
+function addPolyListeners(){
+  polyCanvas.addEventListener('click',e=>{
+    if(polyClosed)return; const p=getPolyPos(e);
+    if(polyPoints.length>=3){ const sc=polyCanvas.getBoundingClientRect().width/polyCanvas.width; const dist=Math.sqrt((p.x-polyPoints[0].x)**2+(p.y-polyPoints[0].y)**2); if(dist<15/sc){polyClose();return;} }
+    polyPoints.push(p); drawPoly();
+  });
+  polyCanvas.addEventListener('mousemove',e=>{ if(polyClosed||polyPoints.length===0)return; drawPoly(getPolyPos(e)); });
+}
+function drawPoly(mouse){
+  polyCtx.clearRect(0,0,polyCanvas.width,polyCanvas.height); polyCtx.drawImage(polyImg,0,0);
+  if(!polyPoints.length)return;
+  const G='#4A7C59'; const sc=polyCanvas.width/600;
+  polyCtx.strokeStyle=G; polyCtx.fillStyle='rgba(74,124,89,0.15)';
+  polyCtx.lineWidth=Math.max(3,4*sc); polyCtx.setLineDash(polyClosed?[]:[Math.round(12*sc),Math.round(6*sc)]);
+  polyCtx.beginPath(); polyCtx.moveTo(polyPoints[0].x,polyPoints[0].y);
+  polyPoints.slice(1).forEach(p=>polyCtx.lineTo(p.x,p.y));
+  if(polyClosed){polyCtx.closePath();polyCtx.fill();polyCtx.stroke();}
+  else{if(mouse)polyCtx.lineTo(mouse.x,mouse.y);polyCtx.stroke();}
+  polyCtx.setLineDash([]);
+  polyPoints.forEach((p,i)=>{ polyCtx.beginPath(); const r=Math.max(8,(i===0?16:10)*sc); polyCtx.arc(p.x,p.y,r,0,Math.PI*2); polyCtx.fillStyle=i===0?G:'#fff'; polyCtx.strokeStyle=G; polyCtx.lineWidth=Math.max(3,4*sc); polyCtx.fill(); polyCtx.stroke(); });
+}
+function polyUndo(){if(polyClosed){polyClosed=false;}else{polyPoints.pop();}drawPoly();}
+function polyClear(){polyPoints=[];polyClosed=false;drawPoly();}
+function polyClose(){if(polyPoints.length<3)return;polyClosed=true;drawPoly();}
+async function cropToPolygon(imgEl,points){
+  const xs=points.map(p=>p.x),ys=points.map(p=>p.y);
+  const minX=Math.min(...xs),minY=Math.min(...ys),maxX=Math.max(...xs),maxY=Math.max(...ys);
+  const off=document.createElement('canvas'); off.width=maxX-minX; off.height=maxY-minY;
+  const ctx=off.getContext('2d');
+  ctx.beginPath(); ctx.moveTo(points[0].x-minX,points[0].y-minY);
+  points.slice(1).forEach(p=>ctx.lineTo(p.x-minX,p.y-minY));
+  ctx.closePath(); ctx.clip(); ctx.drawImage(imgEl,-minX,-minY);
+  return new Promise(res=>off.toBlob(b=>res(new File([b],'crop.jpg',{type:'image/jpeg'})),'image/jpeg',0.92));
+}
+const btnUp=document.getElementById('btn-up');
+if(btnUp) btnUp.addEventListener('click',async function(){
+  if(!polyImg||!polyImg._file)return;
+  this.disabled=true; this.textContent='Analysing…';
+  const st=document.getElementById('st-up'); st.textContent=''; st.style.color='var(--text-3)';
+  let fileToSend=polyImg._file;
+  if(polyClosed&&polyPoints.length>=3){fileToSend=await cropToPolygon(polyImg,polyPoints);st.textContent='Using polygon selection…';}
+  const date=document.getElementById('obs-date').value; const time=document.getElementById('obs-time').value;
+  const sid=getSelectedSampleId('sel-up','new-sample-input-up');
+  const fd=new FormData(); fd.append('image',fileToSend); fd.append('sample_id',sid);
+  if(date&&time)fd.append('timestamp',`${date} ${time}:00`);
+  try {
+    const r=await authFetch(`${API}/detect`,{method:'POST',headers:{Authorization:'Bearer '+getToken()},body:fd});
+    const d=await r.json(); if(!d.success)throw new Error(d.error||'Detection failed');
+    const gc=document.getElementById('grid-result-canvas');
+    const resImg=new Image();
+    resImg.onload=()=>{ gc.width=resImg.naturalWidth;gc.height=resImg.naturalHeight; const gx=gc.getContext('2d');gx.drawImage(resImg,0,0); gx.strokeStyle='rgba(255,255,255,0.4)';gx.lineWidth=1;gx.setLineDash([4,4]); for(let i=1;i<3;i++){gx.beginPath();gx.moveTo(i*gc.width/3,0);gx.lineTo(i*gc.width/3,gc.height);gx.stroke();gx.beginPath();gx.moveTo(0,i*gc.height/3);gx.lineTo(gc.width,i*gc.height/3);gx.stroke();} gx.setLineDash([]); };
+    resImg.src='data:image/jpeg;base64,'+d.result_image;
+    document.getElementById('grid-result-wrap').style.display='block'; document.getElementById('up-empty').style.display='none';
+    document.getElementById('ov-result-wrap').innerHTML=`<img src="data:image/jpeg;base64,${d.result_image}" style="width:100%;border-radius:var(--r);border:1px solid var(--border)">`;
+    document.getElementById('det-result-up').style.display='block';
+    document.getElementById('dlist-up').innerHTML=`<div class="det-row"><span class="det-key">State</span>${badge(d.yolo_state)}</div><div class="det-row"><span class="det-key">Score</span><strong>${d.health_score}</strong></div><div class="det-row"><span class="det-key">Detections</span><span>${d.total_detections}</span></div>${d.detections.map(x=>`<div class="det-row" style="padding-left:12px"><span class="det-key" style="color:var(--text-3)">↳ ${stateLabel(x.class_name)}</span><span class="det-conf">${x.confidence}%</span></div>`).join('')}`;
+    st.textContent='Analysis complete · '+(new Date().toLocaleTimeString()); st.style.color='var(--green)';
+    loadData(); loadSamples();
+  } catch(e){ st.textContent='Error: '+e.message; st.style.color='var(--red)'; }
+  finally{ this.disabled=false; this.textContent='Run analysis'; }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// OV2 — Inline Upload in Overview
+// ══════════════════════════════════════════════════════════════════════════════
+let polyCanvasOv,polyCtxOv,polyImgOv,polyPointsOv=[],polyClosedOv=false,polyListenersAddedOv=false;
+const fiOv2=document.getElementById('fi-ov2'); const dropOv2=document.getElementById('drop-ov2');
+if(fiOv2) fiOv2.addEventListener('change',function(){if(this.files[0])initPolyOv(this.files[0]);});
+if(dropOv2){
+  dropOv2.addEventListener('dragover',e=>{e.preventDefault();dropOv2.classList.add('over');});
+  dropOv2.addEventListener('dragleave',()=>dropOv2.classList.remove('over'));
+  dropOv2.addEventListener('drop',e=>{e.preventDefault();dropOv2.classList.remove('over');if(e.dataTransfer.files[0])initPolyOv(e.dataTransfer.files[0]);});
+}
+function initPolyOv(file){
+  polyImgOv=new Image();polyImgOv._file=file;
+  polyImgOv.onload=function(){
+    document.getElementById('drop-ov2').style.display='none';
+    const wrap=document.getElementById('poly-wrap-ov');wrap.style.display='block';
+    polyCanvasOv=document.getElementById('poly-canvas-ov');polyCanvasOv.width=polyImgOv.naturalWidth;polyCanvasOv.height=polyImgOv.naturalHeight;
+    polyCtxOv=polyCanvasOv.getContext('2d');polyPointsOv=[];polyClosedOv=false;drawPolyOv();
+    document.getElementById('poly-hint-ov').style.display='block';
+    document.getElementById('meta-fields-ov').style.display='block';
+    document.getElementById('ov2-empty').style.display='none';
+    const now=new Date();
+    document.getElementById('obs-date-ov').value=now.toISOString().slice(0,10);
+    document.getElementById('obs-time-ov').value=now.toTimeString().slice(0,5);
+    document.getElementById('btn-ov2').disabled=false;
+    if(!polyListenersAddedOv){addPolyListenersOv();polyListenersAddedOv=true;}
+  };
+  const reader=new FileReader();reader.onload=e=>{polyImgOv.src=e.target.result;};reader.readAsDataURL(file);
+}
+function getPolyPosOv(e){const r=polyCanvasOv.getBoundingClientRect();const sx=polyCanvasOv.width/r.width;const sy=polyCanvasOv.height/r.height;return{x:(e.clientX-r.left)*sx,y:(e.clientY-r.top)*sy};}
+function addPolyListenersOv(){
+  polyCanvasOv.addEventListener('click',e=>{
+    if(polyClosedOv)return;const p=getPolyPosOv(e);
+    if(polyPointsOv.length>=3){const sc=polyCanvasOv.getBoundingClientRect().width/polyCanvasOv.width;const dist=Math.sqrt((p.x-polyPointsOv[0].x)**2+(p.y-polyPointsOv[0].y)**2);if(dist<15/sc){polyCloseOv();return;}}
+    polyPointsOv.push(p);drawPolyOv();
+  });
+  polyCanvasOv.addEventListener('mousemove',e=>{if(polyClosedOv||polyPointsOv.length===0)return;drawPolyOv(getPolyPosOv(e));});
+}
+function drawPolyOv(mouse){
+  polyCtxOv.clearRect(0,0,polyCanvasOv.width,polyCanvasOv.height);polyCtxOv.drawImage(polyImgOv,0,0);
+  if(!polyPointsOv.length)return;
+  const G='#4A7C59';const sc=polyCanvasOv.width/600;
+  polyCtxOv.strokeStyle=G;polyCtxOv.lineWidth=Math.max(3,4*sc);polyCtxOv.setLineDash(polyClosedOv?[]:[Math.round(12*sc),Math.round(6*sc)]);polyCtxOv.fillStyle='rgba(74,124,89,0.15)';
+  polyCtxOv.beginPath();polyCtxOv.moveTo(polyPointsOv[0].x,polyPointsOv[0].y);polyPointsOv.slice(1).forEach(p=>polyCtxOv.lineTo(p.x,p.y));
+  if(polyClosedOv){polyCtxOv.closePath();polyCtxOv.fill();}else if(mouse)polyCtxOv.lineTo(mouse.x,mouse.y);
+  polyCtxOv.stroke();polyCtxOv.setLineDash([]);
+  polyPointsOv.forEach((p,i)=>{polyCtxOv.beginPath();const r=Math.max(8,(i===0?16:10)*sc);polyCtxOv.arc(p.x,p.y,r,0,Math.PI*2);polyCtxOv.fillStyle=i===0?G:'#fff';polyCtxOv.strokeStyle=G;polyCtxOv.lineWidth=Math.max(3,4*sc);polyCtxOv.fill();polyCtxOv.stroke();});
+}
+function polyUndoOv(){if(polyClosedOv){polyClosedOv=false;}else{polyPointsOv.pop();}drawPolyOv();}
+function polyClearOv(){polyPointsOv=[];polyClosedOv=false;drawPolyOv();}
+function polyCloseOv(){if(polyPointsOv.length<3)return;polyClosedOv=true;drawPolyOv();}
+const btnOv2=document.getElementById('btn-ov2');
+if(btnOv2) btnOv2.addEventListener('click',async function(){
+  if(!polyImgOv||!polyImgOv._file)return;
+  this.disabled=true;this.textContent='Analysing…';
+  const st=document.getElementById('st-ov2');st.textContent='';st.style.color='var(--text-3)';
+  let fileToSend=polyImgOv._file;
+  if(polyClosedOv&&polyPointsOv.length>=3){fileToSend=await cropToPolygon(polyImgOv,polyPointsOv);}
+  const date=document.getElementById('obs-date-ov').value;const time=document.getElementById('obs-time-ov').value;
+  const sid=getSelectedSampleId('sel-ov2','new-sample-input-ov2');
+  const fd=new FormData();fd.append('image',fileToSend);fd.append('sample_id',sid);
+  if(date&&time)fd.append('timestamp',`${date} ${time}:00`);
+  try {
+    const r=await authFetch(`${API}/detect`,{method:'POST',headers:{Authorization:'Bearer '+getToken()},body:fd});
+    const d=await r.json();if(!d.success)throw new Error(d.error||'Detection failed');
+    const gc=document.getElementById('ov2-result-canvas');
+    const resImg=new Image();
+    resImg.onload=()=>{gc.width=resImg.naturalWidth;gc.height=resImg.naturalHeight;const gx=gc.getContext('2d');gx.drawImage(resImg,0,0);gx.strokeStyle='rgba(255,255,255,0.4)';gx.lineWidth=1;gx.setLineDash([4,4]);for(let i=1;i<3;i++){gx.beginPath();gx.moveTo(i*gc.width/3,0);gx.lineTo(i*gc.width/3,gc.height);gx.stroke();gx.beginPath();gx.moveTo(0,i*gc.height/3);gx.lineTo(gc.width,i*gc.height/3);gx.stroke();}gx.setLineDash([]);};
+    resImg.src='data:image/jpeg;base64,'+d.result_image;
+    document.getElementById('ov2-result-img-wrap').style.display='block';document.getElementById('ov2-empty').style.display='none';
+    document.getElementById('ov-result-wrap').innerHTML=`<img src="data:image/jpeg;base64,${d.result_image}" style="width:100%;border-radius:var(--r);border:1px solid var(--border)">`;
+    document.getElementById('ov2-det-result').style.display='block';
+    document.getElementById('ov2-dlist').innerHTML=`<div class="det-row"><span class="det-key">State</span>${badge(d.yolo_state)}</div><div class="det-row"><span class="det-key">Score</span><strong>${d.health_score}</strong> / 100</div><div class="det-row"><span class="det-key">Detections</span><span>${d.total_detections}</span></div>${d.detections.map(x=>`<div class="det-row" style="padding-left:12px"><span class="det-key" style="color:var(--text-3)">↳ ${stateLabel(x.class_name)}</span><span class="det-conf">${x.confidence}%</span></div>`).join('')}`;
+    st.textContent='Analysis complete · '+(new Date().toLocaleTimeString());st.style.color='var(--green)';
+    loadData();loadSamples();
+  } catch(e){st.textContent='Error: '+e.message;st.style.color='var(--red)';}
+  finally{this.disabled=false;this.textContent='Run analysis';}
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CONTRIBUTE ANNOTATOR
+// ══════════════════════════════════════════════════════════════════════════════
+let cCanvas,cCtx,cImg,cPoints=[],cClosed=false,cAnnotations=[],cCurrentLabel='healthy_mycelium',cListenersAdded=false;
+const LABEL_COLORS={healthy_mycelium:'#4A7C59',dry_aged_mycelium:'#C07A2A',contamination_risk:'#8B3A2A',exposed_substrate:'#7A5C3A'};
+
+window._queue=[];window._queueIdx=0;
+
+document.getElementById('fi-contrib').addEventListener('change',function(){ if(this.files.length)initContribQueue(Array.from(this.files)); });
+document.getElementById('drop-contrib').addEventListener('dragover',e=>{e.preventDefault();document.getElementById('drop-contrib').classList.add('over');});
+document.getElementById('drop-contrib').addEventListener('dragleave',()=>document.getElementById('drop-contrib').classList.remove('over'));
+document.getElementById('drop-contrib').addEventListener('drop',e=>{ e.preventDefault();document.getElementById('drop-contrib').classList.remove('over'); if(e.dataTransfer.files.length)initContribQueue(Array.from(e.dataTransfer.files)); });
+
+function initContribQueue(files){
+  for(const f of files) window._queue.push({file:f,annotations:[],currentPoints:[],currentClosed:false});
+  updateQueueUI(); loadQueueImage(window._queueIdx);
+}
+function updateQueueUI(){
+  const q=window._queue;
+  const badge2=document.getElementById('queue-badge'); if(badge2) badge2.style.display=q.length>1?'flex':'none';
+  const strip=document.getElementById('queue-strip'); if(strip) strip.style.display=q.length>0?'block':'none';
+  const sl=document.getElementById('submit-count-label'); if(sl) sl.textContent=q.length===1?'1 image':`${q.length} images`;
+  const qc=document.getElementById('queue-current'); if(qc) qc.textContent=window._queueIdx+1;
+  const qt=document.getElementById('queue-total'); if(qt) qt.textContent=q.length;
+  const thumbs=document.getElementById('queue-thumbs'); if(!thumbs)return;
+  thumbs.innerHTML=q.map((item,i)=>{
+    const border=i===window._queueIdx?'2px solid var(--green)':'1px solid var(--border)';
+    return`<div onclick="switchQueueImage(${i})" style="position:relative;width:52px;height:52px;border-radius:6px;overflow:hidden;border:${border};cursor:pointer;flex-shrink:0;background:var(--bg)">
+      ${item._dataUrl?`<img src="${item._dataUrl}" style="width:100%;height:100%;object-fit:cover">`:'<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:18px;color:var(--text-3)">⏳</div>'}
+      ${item.annotations.length>0?`<div style="position:absolute;bottom:2px;right:2px;background:var(--green);color:#fff;font-size:9px;font-weight:700;border-radius:3px;padding:1px 4px">${item.annotations.length}</div>`:''}
+    </div>`;
+  }).join('');
+}
+function switchQueueImage(idx){ saveCurrentQueueState(); window._queueIdx=idx; updateQueueUI(); loadQueueImage(idx); }
+function saveCurrentQueueState(){
+  const item=window._queue[window._queueIdx]; if(!item)return;
+  item.annotations=[...cAnnotations]; item.currentPoints=[...cPoints]; item.currentClosed=cClosed;
+}
+function loadQueueImage(idx){
+  const item=window._queue[idx]; if(!item)return;
+  cAnnotations=item.annotations?[...item.annotations]:[];
+  cPoints=item.currentPoints?[...item.currentPoints]:[];
+  cClosed=item.currentClosed||false;
+  document.getElementById('contrib-annotate-card').style.display='block';
+  document.getElementById('contrib-info-card').style.display='block';
+  document.getElementById('drop-contrib').style.display='none';
+  cImg=new Image(); cImg._file=item.file;
+  cImg.onload=function(){
+    item._dataUrl=item._dataUrl||cImg._dataUrl;
+    cCanvas=document.getElementById('contrib-canvas');
+    cCanvas.width=cImg.naturalWidth; cCanvas.height=cImg.naturalHeight;
+    cCtx=cCanvas.getContext('2d'); drawContrib(); updateAnnList(); updateQueueUI();
+    if(!cListenersAdded){addContribListeners();cListenersAdded=true;}
+  };
+  if(item._dataUrl){cImg.src=item._dataUrl;}
+  else{const reader=new FileReader();reader.onload=e=>{item._dataUrl=e.target.result;cImg._dataUrl=e.target.result;cImg.src=e.target.result;};reader.readAsDataURL(item.file);}
+}
+function addMoreImages(){const inp=document.createElement('input');inp.type='file';inp.accept='image/jpeg,image/png,image/webp';inp.multiple=true;inp.onchange=function(){if(this.files.length){saveCurrentQueueState();initContribQueue(Array.from(this.files));}};inp.click();}
+
+function setContribLabel(label){
+  cCurrentLabel=label;
+  document.querySelectorAll('.contrib-label-btn').forEach(btn=>{
+    const isActive=btn.dataset.label===label;
+    btn.style.borderColor=isActive?LABEL_COLORS[label]:'transparent';
+    btn.style.fontWeight=isActive?'600':'400';
+  });
+  document.getElementById('contrib-hint').textContent=`Drawing: ${label.replace(/_/g,' ')} — click to add points, click start point to close.`;
+}
+function addContribListeners(){
+  cCanvas.addEventListener('click',e=>{
+    if(cClosed){cClosed=false;cPoints=[];drawContrib();return;}
+    const p=getContribPos(e);
+    if(cPoints.length>=3){const sc=cCanvas.getBoundingClientRect().width/cCanvas.width;const dist=Math.sqrt((p.x-cPoints[0].x)**2+(p.y-cPoints[0].y)**2);if(dist<15/sc){contribClose();return;}}
+    cPoints.push(p);drawContrib();
+  });
+  cCanvas.addEventListener('mousemove',e=>{if(cClosed||cPoints.length===0)return;drawContrib(getContribPos(e));});
+}
+function getContribPos(e){const r=cCanvas.getBoundingClientRect();const sx=cCanvas.width/r.width;const sy=cCanvas.height/r.height;return{x:(e.clientX-r.left)*sx,y:(e.clientY-r.top)*sy};}
+function drawContrib(mouse){
+  cCtx.clearRect(0,0,cCanvas.width,cCanvas.height);cCtx.drawImage(cImg,0,0);
+  const cScale=cCanvas.width/600;
+  cAnnotations.forEach(ann=>{
+    const col=LABEL_COLORS[ann.label]||'#888';
+    cCtx.fillStyle=col+'33';cCtx.strokeStyle=col;cCtx.lineWidth=Math.max(3,4*cScale);cCtx.setLineDash([]);
+    cCtx.beginPath();cCtx.moveTo(ann.points[0].x,ann.points[0].y);ann.points.slice(1).forEach(p=>cCtx.lineTo(p.x,p.y));
+    cCtx.closePath();cCtx.fill();cCtx.stroke();
+    const cx=ann.points.reduce((s,p)=>s+p.x,0)/ann.points.length;
+    const cy=ann.points.reduce((s,p)=>s+p.y,0)/ann.points.length;
+    const txt=ann.label.replace(/_/g,' '); cCtx.fillStyle='rgba(0,0,0,0.6)';
+    const tw=cCtx.measureText(txt).width; cCtx.fillRect(cx-tw/2-4,cy-10,tw+8,18);
+    cCtx.fillStyle='#fff';cCtx.font=`${Math.max(12,14*cScale)}px sans-serif`;cCtx.textAlign='center';cCtx.fillText(txt,cx,cy+2);cCtx.textAlign='left';
+  });
+  if(!cPoints.length)return;
+  const csScale=cCanvas.width/600;
+  const col=LABEL_COLORS[cCurrentLabel]||'#888';
+  cCtx.strokeStyle=col;cCtx.lineWidth=Math.max(3,4*csScale);cCtx.setLineDash(cClosed?[]:[Math.round(12*csScale),Math.round(6*csScale)]);
+  cCtx.fillStyle=col+'22';
+  cCtx.beginPath();cCtx.moveTo(cPoints[0].x,cPoints[0].y);cPoints.slice(1).forEach(p=>cCtx.lineTo(p.x,p.y));
+  if(cClosed){cCtx.closePath();cCtx.fill();}else if(mouse)cCtx.lineTo(mouse.x,mouse.y);
+  cCtx.stroke();cCtx.setLineDash([]);
+  cPoints.forEach((p,i)=>{cCtx.beginPath();const r=Math.max(8,(i===0?16:10)*csScale);cCtx.arc(p.x,p.y,r,0,Math.PI*2);cCtx.fillStyle=i===0?col:'#fff';cCtx.strokeStyle=col;cCtx.lineWidth=Math.max(3,4*csScale);cCtx.fill();cCtx.stroke();});
+}
+function contribClose(){
+  if(cPoints.length<3){document.getElementById('contrib-hint').textContent='Add at least 3 points first.';return;}
+  cClosed=true;drawContrib();
+  setTimeout(()=>{
+    const norm=cPoints.map(p=>({x:parseFloat((p.x/cCanvas.width).toFixed(4)),y:parseFloat((p.y/cCanvas.height).toFixed(4))}));
+    cAnnotations.push({label:cCurrentLabel,points:cPoints.slice(),normPoints:norm});
+    cPoints=[];cClosed=false;drawContrib();updateAnnList();
+    document.getElementById('contrib-hint').textContent=`Region saved as "${cCurrentLabel.replace(/_/g,' ')}" (${cAnnotations.length} total). Draw another or submit.`;
+  },200);
+}
+function contribUndo(){if(cClosed){cClosed=false;}else{cPoints.pop();}drawContrib();}
+function contribClear(){cPoints=[];cClosed=false;drawContrib();}
+function contribClearAll(){cAnnotations=[];cPoints=[];cClosed=false;drawContrib();updateAnnList();}
+function updateAnnList(){
+  const wrap=document.getElementById('contrib-ann-list');const list=document.getElementById('contrib-ann-items');
+  if(!cAnnotations.length){if(wrap)wrap.style.display='none';return;}
+  if(wrap)wrap.style.display='block';
+  if(list)list.innerHTML=cAnnotations.map((ann,i)=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px"><span>${badge(ann.label)}</span><span style="color:var(--text-3)">${ann.points.length} pts</span><button onclick="removeAnn(${i})" style="font-size:11px;padding:2px 8px;border:1px solid var(--border);border-radius:4px;background:var(--bg);cursor:pointer;color:var(--red)">Remove</button></div>`).join('');
+}
+function removeAnn(i){cAnnotations.splice(i,1);drawContrib();updateAnnList();}
+
+// ── Achievement system ────────────────────────────────────────────────────────
+window._sessionContribs=0;
+const ACHIEVE_MILESTONES=[
+  {count:1,icon:'🌱',title:'First contribution!',desc:'You have added your first observation to the dataset. Welcome to the community.'},
+  {count:2,icon:'🍄',title:'Growing fast!',desc:'Two contributions submitted. The model is already learning from your annotations.'},
+  {count:3,icon:'🔬',title:'Dedicated annotator',desc:'Three images contributed. Your precision is helping the model distinguish healthy from aging mycelium.'},
+  {count:5,icon:'⭐',title:'Core contributor',desc:'Five contributions! You are one of the most active members of the dataset community.'},
+  {count:10,icon:'🏅',title:'Dataset champion',desc:'Ten contributions submitted. Your work is significantly expanding the diversity of the training data.'},
+];
+function showAchievement(count,roboflowLinked){
+  const banner=document.getElementById('contrib-achievement');if(!banner)return;
+  let milestone=null;for(const m of ACHIEVE_MILESTONES)if(count>=m.count)milestone=m;
+  if(!milestone)milestone={icon:'🍄',title:'Contribution received!',desc:'Your image has been added to the dataset.'};
+  document.getElementById('achieve-icon').textContent=milestone.icon;
+  document.getElementById('achieve-title').textContent=milestone.title;
+  document.getElementById('achieve-desc').textContent=milestone.desc+(roboflowLinked?' Synced to Roboflow ✓':'');
+  const pipRow=document.getElementById('achieve-pip-row');pipRow.innerHTML='';
+  for(let i=0;i<Math.min(count,10);i++){const pip=document.createElement('div');pip.style.cssText=`width:8px;height:8px;border-radius:50%;background:var(--green)`;pipRow.appendChild(pip);}
+  if(count>10){const extra=document.createElement('span');extra.textContent=`+${count-10}`;extra.style.cssText='font-size:10px;color:var(--text-3);margin-left:4px';pipRow.appendChild(extra);}
+  document.getElementById('achieve-count-label').textContent=count===1?'1 contribution this session':`${count} contributions this session`;
+  banner.style.display='block';banner.style.opacity='0';banner.style.transform='translateY(6px)';
+  requestAnimationFrame(()=>{banner.style.transition='opacity 0.4s ease,transform 0.4s ease';banner.style.opacity='1';banner.style.transform='translateY(0)';});
+}
+
+async function submitAllContributions(){
+  saveCurrentQueueState();
+  const q=window._queue;if(!q.length){document.getElementById('contrib-st').textContent='Please upload at least one image.';return;}
+  const btn=document.getElementById('contrib-submit-btn');const st=document.getElementById('contrib-st');
+  btn.disabled=true;btn.textContent='Submitting…';st.textContent='';st.style.color='var(--text-3)';
+  const contributor=document.getElementById('contrib-name').value||'anonymous';
+  const locField=document.getElementById('contrib-location');
+  if(!locField.value&&window._weatherLocation)locField.value=window._weatherLocation;
+  const location=locField.value||'';
+  const lat=document.getElementById('contrib-lat').value||'';
+  const lng=document.getElementById('contrib-lng').value||'';
+  const myc_type=document.getElementById('contrib-type').value||'';
+  const notes=document.getElementById('contrib-notes').value||'';
+  let successCount=0;
+  for(let i=0;i<q.length;i++){
+    const item=q[i];btn.textContent=`Submitting ${i+1} / ${q.length}…`;
+    const annsForBackend=item.annotations.map(ann=>({label:ann.label,points:ann.normPoints,img_width:cCanvas?cCanvas.width:1000,img_height:cCanvas?cCanvas.height:1000}));
+    const fd=new FormData();fd.append('image',item.file);fd.append('contributor',contributor);fd.append('location',location);fd.append('lat',lat);fd.append('lng',lng);fd.append('mycelium_type',myc_type);fd.append('notes',notes);fd.append('annotations',JSON.stringify(annsForBackend));
+    try{
+      const headers={};if(getToken())headers['Authorization']='Bearer '+getToken();
+      const r=await fetch(`${API}/contribute`,{method:'POST',headers,body:fd});
+      const d=await r.json();if(d.success){successCount++;window._sessionContribs=(window._sessionContribs||0)+1;}
+    }catch(e){console.warn('Failed',i,e);}
+  }
+  window._queue=[];window._queueIdx=0;cAnnotations=[];cPoints=[];cClosed=false;
+  document.getElementById('drop-contrib').style.display='block';
+  document.getElementById('contrib-annotate-card').style.display='none';
+  document.getElementById('contrib-info-card').style.display='none';
+  updateQueueUI();st.textContent='';btn.textContent='Submit another observation';btn.disabled=false;
+  showAchievement(window._sessionContribs,true);loadContribStats();
+}
+
+// ── Admin panel placeholder ───────────────────────────────────────────────────
+function showAdminPanel(){
+  document.getElementById('user-menu').classList.remove('open');
+  alert('Admin panel: visit ' + API + '/admin/images in your browser to see all uploaded detection images from all users.');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════════════════════════════
+function isGuest()    { return !getToken(); }
+function isLoggedIn() { return !!getToken(); }
+
+function continueAsGuest() {
+  document.getElementById('auth-overlay').style.display = 'none';
+  updateTopbarForGuest();
+  // Guests see Contribute, Overview (community stats), How it works
+  // but Upload & Analyse sections show a sign-in prompt
+  guestGateUploadSections();
+  loadContribStats();
+  initLeafletMap();
+}
+
+function updateTopbarForGuest() {
+  const nameEl   = document.getElementById('user-display-name');
+  const avatarEl = document.getElementById('user-avatar');
+  if (nameEl)   nameEl.textContent  = 'Sign in';
+  if (nameEl)   nameEl.style.color  = 'var(--green)';
+  if (avatarEl) avatarEl.textContent = '→';
+  if (avatarEl) { avatarEl.style.background = 'var(--green-bg)'; avatarEl.style.color = 'var(--green)'; }
+}
+
+function guestGateUploadSections() {
+  // Replace Upload & Analyse drop zones with sign-in prompts
+  const gateHTML = `<div style="padding:24px;text-align:center;background:var(--bg);border-radius:var(--r);border:1.5px solid var(--border)">
+    <div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:6px">Track your own mycelium</div>
+    <div style="font-size:12px;color:var(--text-2);line-height:1.6;margin-bottom:16px">
+      Create a free account to upload observation photos,<br>monitor health scores over time, and build your sample timeline.
+    </div>
+    <button onclick="showAuthModal(false)" class="btn-primary" style="font-size:12px;padding:8px 20px">Get started — it's free</button>
+    <div style="margin-top:10px;font-size:11px;color:var(--text-3)">Already have an account? <span onclick="showAuthModal(false)" style="color:var(--green);cursor:pointer;text-decoration:underline">Sign in</span></div>
+  </div>`;
+
+  // Gate OV2 inline upload (overview page)
+  const ovUpload = document.getElementById('ov-upload-section');
+  if (ovUpload) {
+    const label = ovUpload.querySelector('.card-label');
+    const labelText = label ? label.outerHTML : '';
+    ovUpload.innerHTML = labelText + gateHTML;
+  }
+
+  // Gate Upload page drop zone
+  const dropUp = document.getElementById('drop-up');
+  if (dropUp) dropUp.parentElement.innerHTML = gateHTML;
+
+  // Hide sensor 1-min reading btn for guests
+  const sensorBtn = document.getElementById('sensor-btn');
+  if (sensorBtn) sensorBtn.closest('.card').innerHTML =
+    `<div class="card-label">1-min sensor reading</div>` + gateHTML;
+}
+
+function showAuthModal(fromUpload = false) {
+  const overlay  = document.getElementById('auth-overlay');
+  const guestNote = document.getElementById('auth-guest-note');
+  if (guestNote) guestNote.style.display = fromUpload ? 'block' : 'none';
+  overlay.style.display = 'flex';
+  // Click outside to close (for guest already in app)
+  overlay.onclick = e => { if (e.target === overlay) overlay.style.display = 'none'; };
+}
+
+function onLoggedIn() {
+  document.getElementById('auth-overlay').style.display = 'none';
+  const name = getUsername();
+  const nameEl   = document.getElementById('user-display-name');
+  const avatarEl = document.getElementById('user-avatar');
+  if (nameEl)   nameEl.textContent   = name;
+  if (avatarEl) {
+    avatarEl.textContent = (name[0]||'?').toUpperCase();
+    avatarEl.style.background = 'var(--green-bg)';
+    avatarEl.style.color      = 'var(--green)';
+  }
+  if (getIsAdmin()) {
+    const adminLink = document.getElementById('admin-link');
+    if (adminLink) adminLink.style.display = 'block';
+  }
+  // Full data load for logged-in users
+  loadData();
+  loadContribStats();
+  loadSamples();
+  handleSampleSelect('sel-up','new-sample-input-up','new-sample-row-up');
+  handleSampleSelect('sel-ov2','new-sample-input-ov2','new-sample-row-ov2');
+}
+
+// Check if already logged in
+if (getToken()) {
+  onLoggedIn();
+} else {
+  // Guest mode by default — no forced login wall
+  // Auth overlay only appears when user clicks sign-in or tries to upload
+  continueAsGuest();
+}
+
+// CSV dropzones
+setupCSVDropzone('drop-surface-csv','fi-surface-csv','surface');
+setupCSVDropzone('drop-env-csv','fi-env-csv','env');
+
+// Label button style
+const labelBtnStyle = document.createElement('style');
+labelBtnStyle.textContent = '.contrib-label-btn{font-size:12px;font-weight:500;padding:6px 14px;border-radius:99px;cursor:pointer;transition:border-color .15s,font-weight .15s;font-family:inherit;}';
+document.head.appendChild(labelBtnStyle);
+
+// Enter key on auth forms
+document.getElementById('login-pass').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
+document.getElementById('reg-pass').addEventListener('keydown',   e=>{ if(e.key==='Enter') doRegister(); });
+
+// Periodic refresh
+setInterval(()=>{ if(getToken()){ loadData(); loadContribStats(); } }, 30000);
+
+</script>
+</body>
+</html>
