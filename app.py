@@ -38,18 +38,34 @@ def get_db():
 def init_db():
     conn = get_db()
 
+    # ── Migrate existing DB: add user_id columns if missing ───────────────
+    for tbl, col in [
+        ("detections",       "user_id INTEGER"),
+        ("surface_readings", "user_id INTEGER"),
+        ("env_readings",     "user_id INTEGER"),
+        ("contributions",    "user_id INTEGER"),
+        ("contributions",    "lat REAL"),
+        ("contributions",    "lng REAL"),
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE {tbl} ADD COLUMN {col}")
+            conn.commit()
+            print(f"  ↳ Migrated: {tbl}.{col.split()[0]}")
+        except Exception:
+            pass  # Column already exists
+
     # ── Users ──────────────────────────────────────────────────────────────
     conn.execute("""
         CREATE TABLE IF NOT EXISTS users (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            username     TEXT    NOT NULL UNIQUE,
-            password_hash TEXT   NOT NULL,
-            created_at   TEXT    NOT NULL,
-            is_admin     INTEGER DEFAULT 0
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            username      TEXT    NOT NULL UNIQUE,
+            password_hash TEXT    NOT NULL,
+            created_at    TEXT    NOT NULL,
+            is_admin      INTEGER DEFAULT 0
         )
     """)
 
-    # ── Detections (add user_id) ───────────────────────────────────────────
+    # ── Detections ─────────────────────────────────────────────────────────
     conn.execute("""
         CREATE TABLE IF NOT EXISTS detections (
             id               INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -68,7 +84,7 @@ def init_db():
         )
     """)
 
-    # ── Surface readings (add user_id) ─────────────────────────────────────
+    # ── Surface readings ───────────────────────────────────────────────────
     conn.execute("""
         CREATE TABLE IF NOT EXISTS surface_readings (
             id               INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -81,7 +97,7 @@ def init_db():
         )
     """)
 
-    # ── Env readings (add user_id) ─────────────────────────────────────────
+    # ── Env readings ───────────────────────────────────────────────────────
     conn.execute("""
         CREATE TABLE IF NOT EXISTS env_readings (
             id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -94,7 +110,7 @@ def init_db():
         )
     """)
 
-    # ── Contributions (add user_id) ────────────────────────────────────────
+    # ── Contributions ──────────────────────────────────────────────────────
     conn.execute("""
         CREATE TABLE IF NOT EXISTS contributions (
             id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -115,18 +131,47 @@ def init_db():
 
     conn.commit()
 
-    # ── Create admin account (Kecen Yi) if not exists ─────────────────────
-    existing = conn.execute(
-        "SELECT id FROM users WHERE username = ?", ("Kecen Yi",)
-    ).fetchone()
-    if not existing:
+    # ── Migrations: add missing columns to existing tables ─────────────────
+    # Safe: ALTER TABLE ADD COLUMN is ignored if column already exists via try/except
+    migrations = [
+        ("detections",       "user_id          INTEGER"),
+        ("surface_readings", "user_id          INTEGER"),
+        ("env_readings",     "user_id          INTEGER"),
+        ("contributions",    "user_id          INTEGER"),
+        ("contributions",    "lat              REAL"),
+        ("contributions",    "lng              REAL"),
+    ]
+    for table, col_def in migrations:
+        try:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {col_def}")
+            conn.commit()
+            print(f"  ↳ Migrated {table}: added {col_def.split()[0]}")
+        except Exception:
+            pass  # Column already exists — fine
+
+    # ── Create / reset admin account (Kecen Yi) ────────────────────────────
+    try:
         pw_hash = bcrypt.hashpw("symbioframe2026".encode(), bcrypt.gensalt()).decode()
-        conn.execute(
-            "INSERT INTO users (username, password_hash, created_at, is_admin) VALUES (?,?,?,1)",
-            ("Kecen Yi", pw_hash, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-        )
+        existing = conn.execute(
+            "SELECT id FROM users WHERE username = ?", ("Kecen Yi",)
+        ).fetchone()
+        if not existing:
+            conn.execute(
+                "INSERT INTO users (username, password_hash, created_at, is_admin) "
+                "VALUES (?,?,?,1)",
+                ("Kecen Yi", pw_hash, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            )
+            print("✅ Admin account created: Kecen Yi / symbioframe2026")
+        else:
+            # Always reset password hash on startup so it's always correct
+            conn.execute(
+                "UPDATE users SET password_hash=?, is_admin=1 WHERE username=?",
+                (pw_hash, "Kecen Yi")
+            )
+            print("✅ Admin account refreshed: Kecen Yi")
         conn.commit()
-        print("✅ Admin account created: Kecen Yi")
+    except Exception as e:
+        print(f"⚠️  Admin account error: {e}")
 
     conn.close()
     print("✅ Database ready:", DB_PATH)
@@ -212,7 +257,7 @@ def register():
         row = conn.execute("SELECT id, is_admin FROM users WHERE username=?", (username,)).fetchone()
         conn.close()
         token = make_token(row["id"], username, bool(row["is_admin"]))
-        return jsonify({"success": True, "token": token, "username": username, "is_admin": False})
+        return jsonify({"success": True, "token": token, "username": username, "is_admin": bool(row["is_admin"])})
     except sqlite3.IntegrityError:
         return jsonify({"error": "Username already taken"}), 409
 
@@ -382,8 +427,7 @@ def try_compute_delta_realtime(sample_id, user_id, conn):
 
 @app.route("/", methods=["GET"])
 def index():
-    from flask import send_from_directory
-    return send_from_directory(".", "dashboard_v3.html")
+    return jsonify({"status": "ok", "message": "SYMBIO-FRAME backend running 🍄"})
 
 
 # ── Detect ────────────────────────────────────────────────────────────────────
@@ -896,6 +940,21 @@ def admin_images():
     """).fetchall()
     conn.close()
     return jsonify({"images": [dict(r) for r in rows]})
+
+
+# ── Emergency: reset admin password (accessible without auth) ─────────────────
+@app.route("/reset-admin", methods=["POST"])
+def reset_admin():
+    """Emergency endpoint — resets Kecen Yi password to symbioframe2026."""
+    pw_hash = bcrypt.hashpw("symbioframe2026".encode(), bcrypt.gensalt()).decode()
+    conn = get_db()
+    conn.execute(
+        "UPDATE users SET password_hash=?, is_admin=1 WHERE username=?",
+        (pw_hash, "Kecen Yi")
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True, "message": "Admin password reset to symbioframe2026"})
 
 
 # ── Launch ────────────────────────────────────────────────────────────────────
