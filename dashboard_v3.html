@@ -578,7 +578,7 @@ select:focus { outline: none; border-color: var(--green); }
 <div class="main">
 
   <!-- NEW LAYOUT: Two-column — Input (left) | Results (right) -->
-  <div style="display:grid;grid-template-columns:1fr 1.2fr;gap:20px;align-items:start">
+  <div style="display:grid;grid-template-columns:1fr 1.2fr;gap:20px;align-items:stretch">
 
     <!-- ══ LEFT COLUMN — INPUT AREA ══════════════════════════════════ -->
     <div>
@@ -590,7 +590,9 @@ select:focus { outline: none; border-color: var(--green); }
       <div class="card" id="ov-upload-section" style="border-left:3px solid var(--green);margin-bottom:12px">
         <div style="margin-bottom:14px">
           <div class="card-label" style="margin-bottom:2px">Upload & Analyse</div>
-          <div style="font-size:12px;color:var(--text-2)">Upload an observation photo to run YOLO analysis.</div>
+          <div style="font-size:12px;color:var(--text-2);line-height:1.6">
+            Upload a photo, then <strong style="color:var(--text)">draw a polygon</strong> around the mycelium area you want to analyse — click to add points, click the first point to close the shape. Leave undrawn to analyse the full image.
+          </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
           <!-- Drop zone + polygon -->
@@ -684,7 +686,7 @@ select:focus { outline: none; border-color: var(--green); }
         <div>
           <div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:6px">1-min sensor reading</div>
           <button id="sensor-btn" onclick="triggerSensor()" style="width:100%;font-size:12px;padding:8px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:var(--r);cursor:pointer;font-family:inherit;font-weight:500">
-            ⬤ Start 1-min reading
+            Start 1-min reading
           </button>
           <div style="margin-top:8px;display:none;background:var(--bg);border-radius:var(--r);padding:8px;border:1px solid var(--border)" id="sensor-prog-wrap">
             <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden">
@@ -720,7 +722,7 @@ select:focus { outline: none; border-color: var(--green); }
       <!-- Last analysis result -->
       <div class="card" style="margin-bottom:12px">
         <div class="card-label">Last analysis result</div>
-        <div id="ov-result-wrap" style="background:var(--bg);border-radius:var(--r);min-height:160px;display:flex;align-items:center;justify-content:center;color:var(--text-3);font-size:13px;border:1px solid var(--border)">
+        <div id="ov-result-wrap" style="background:var(--bg);border-radius:var(--r);min-height:260px;display:flex;align-items:center;justify-content:center;color:var(--text-3);font-size:13px;border:1px solid var(--border)">
           No analysis yet — upload a photo to begin
         </div>
         <div id="ov-det-list" style="margin-top:10px"></div>
@@ -788,6 +790,38 @@ select:focus { outline: none; border-color: var(--green); }
       <div class="card-label" style="margin-bottom:0">Sample timeline · recent observations</div>
     </div>
     <div class="tl-grid" id="tl-strip"></div>
+  </div>
+
+  <!-- Community / Contribute invite strip -->
+  <div style="margin-top:16px;display:grid;grid-template-columns:1.4fr 1fr;gap:16px;align-items:start">
+
+    <!-- Left: invite text -->
+    <div class="card">
+      <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-3);margin-bottom:8px">Help us build a better model</div>
+      <div style="font-size:18px;font-weight:600;color:var(--text);margin-bottom:10px;line-height:1.3">Contribute your mycelium observations</div>
+      <div style="font-size:13px;color:var(--text-2);line-height:1.7;margin-bottom:16px">
+        This detection model improves with every new image it learns from. If you are working with mycelium — whether in a lab, studio, or field setting — your photos can help train a more accurate, more diverse model. Upload a specimen photo, draw regions, and label what you see. It takes less than two minutes.
+      </div>
+      <div style="display:flex;gap:24px;margin-bottom:16px">
+        <div><div style="font-size:22px;font-weight:600;color:var(--text)" id="ov-contrib-total">—</div><div style="font-size:11px;color:var(--text-3)">contributors</div></div>
+        <div style="width:1px;background:var(--border)"></div>
+        <div><div style="font-size:22px;font-weight:600;color:var(--text)" id="ov-contrib-locs">—</div><div style="font-size:11px;color:var(--text-3)">locations worldwide</div></div>
+      </div>
+      <button onclick="showTab('contribute',document.querySelectorAll('.tab')[3])" class="btn-primary" style="font-size:13px;padding:10px 20px">
+        Contribute an observation →
+      </button>
+    </div>
+
+    <!-- Right: Leaflet map -->
+    <div class="card">
+      <div id="contrib-leaflet-map" style="height:220px"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px">
+        <div style="font-size:10px;color:var(--text-3)">© OpenStreetMap contributors</div>
+        <div style="font-size:11px;color:var(--text-3)">
+          Unknown location: <strong id="unknown-count" style="color:var(--text-2)">—</strong>
+        </div>
+      </div>
+    </div>
   </div>
 
 </div>
@@ -1576,7 +1610,17 @@ function checkSensorPrecision(records) {
 async function loadData() {
   try {
     const res  = await authFetch(`${API}/history?limit=50`);
-    if(res.status===401){ return; } // Not logged in yet
+    if(res.status===401){
+      // Token expired (server restarted) — clear and prompt re-login
+      if(getToken()){
+        localStorage.removeItem('sf_token');
+        localStorage.removeItem('sf_username');
+        localStorage.removeItem('sf_is_admin');
+        updateTopbarForGuest();
+        showAuthModal(false);
+      }
+      return;
+    }
     const data = await res.json();
     if(!data.records||!data.records.length){
       document.getElementById('live-text').textContent='No data yet'; return;
@@ -1660,14 +1704,14 @@ async function triggerSensor(){
   const st=document.getElementById('sensor-st');
   const prog=document.getElementById('sensor-prog');
   const progWrap=prog.parentElement;
-  if(sensorTimer){ clearInterval(sensorTimer); btn.classList.remove('running'); btn.textContent='⬤ Start 1-min reading'; progWrap.style.display='none'; st.textContent=''; sensorTimer=null; return; }
+  if(sensorTimer){ clearInterval(sensorTimer); btn.classList.remove('running'); btn.textContent='Start 1-min reading'; progWrap.style.display='none'; st.textContent=''; sensorTimer=null; return; }
   btn.classList.add('running'); btn.textContent='◼ Stop reading';
   progWrap.style.display='block'; prog.style.width='0%';
   st.textContent='Reading sensor data… 60 seconds'; st.className='st-msg';
   let elapsed=0;
   sensorTimer=setInterval(()=>{
     elapsed+=1; prog.style.width=(elapsed/60*100)+'%'; st.textContent=`Reading… ${60-elapsed}s remaining`;
-    if(elapsed>=60){ clearInterval(sensorTimer); sensorTimer=null; btn.classList.remove('running'); btn.textContent='⬤ Start 1-min reading'; st.textContent='Reading complete. Updating data…'; st.className='st-msg ok'; progWrap.style.display='none'; setTimeout(()=>{ loadData(); st.textContent=''; },2000); }
+    if(elapsed>=60){ clearInterval(sensorTimer); sensorTimer=null; btn.classList.remove('running'); btn.textContent='Start 1-min reading'; st.textContent='Reading complete. Updating data…'; st.className='st-msg ok'; progWrap.style.display='none'; setTimeout(()=>{ loadData(); st.textContent=''; },2000); }
   },1000);
 }
 
