@@ -1508,7 +1508,7 @@ async function fetchWeather() {
       const r = await fetch(url); const d = await r.json();
       const cur = d.current;
       const desc = WMO_DESC[cur.weather_code] || `Code ${cur.weather_code}`;
-      const geoR = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`);
+      const geoR = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=en`);
       const geoD = await geoR.json();
       const city    = geoD.address?.city||geoD.address?.town||geoD.address?.village||'';
       const country = geoD.address?.country||'';
@@ -1867,7 +1867,7 @@ async function autoLocateContrib() {
   navigator.geolocation.getCurrentPosition(async pos=>{
     const {latitude:lat,longitude:lon}=pos.coords;
     try {
-      const r=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`);
+      const r=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=en`);
       const d=await r.json();
       const city=d.address?.city||d.address?.town||d.address?.village||'';
       const country=d.address?.country||'';
