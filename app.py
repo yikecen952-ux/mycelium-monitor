@@ -18,7 +18,7 @@ CORS(app)
 
 UPLOAD_FOLDER = "uploads"
 DB_PATH       = "mycelium.db"
-SECRET_KEY    = "symbioframe_secret_2026"   # JWT signing key
+SECRET_KEY    = os.environ.get("JWT_SECRET", "symbioframe_secret_key_2026_secure")   # JWT signing key
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 model = YOLO("best.pt")
@@ -427,6 +427,11 @@ def try_compute_delta_realtime(sample_id, user_id, conn):
 
 @app.route("/", methods=["GET"])
 def index():
+    from flask import send_from_directory
+    return send_from_directory(".", "dashboard_v3.html")
+
+@app.route("/api/status", methods=["GET"])
+def status():
     return jsonify({"status": "ok", "message": "SYMBIO-FRAME backend running 🍄"})
 
 

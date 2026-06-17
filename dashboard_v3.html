@@ -577,64 +577,174 @@ select:focus { outline: none; border-color: var(--green); }
 <div id="page-overview" class="page active">
 <div class="main">
 
-  <!-- Row 1: Image result | Score | Sensor + Alerts -->
-  <div class="g121">
+  <!-- NEW LAYOUT: Two-column — Input (left) | Results (right) -->
+  <div style="display:grid;grid-template-columns:1fr 1.2fr;gap:20px;align-items:start">
 
-    <!-- Left: Last YOLO result -->
-    <div class="card">
-      <div class="card-label">Last analysis result</div>
-      <div id="ov-result-wrap">
-        <div style="aspect-ratio:1;background:var(--bg);border-radius:var(--r);display:flex;align-items:center;justify-content:center;color:var(--text-3);font-size:13px;">No image yet</div>
-      </div>
-      <div style="margin-top:12px" id="ov-det-list"></div>
-    </div>
+    <!-- ══ LEFT COLUMN — INPUT AREA ══════════════════════════════════ -->
+    <div>
 
-    <!-- Middle: Score + Prediction + Weather (unified) -->
-    <div style="display:flex;flex-direction:column;gap:16px">
+      <!-- Input area label -->
+      <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-3);margin-bottom:10px;padding-left:2px">Input</div>
 
-      <!-- Health score card -->
-      <div class="card">
-        <div class="card-label">Health score</div>
-        <div class="big-num" id="score-num">—<span class="big-unit">/ 100</span></div>
-        <div class="num-meta" id="score-meta">Awaiting observation</div>
-        <div class="rule"></div>
-        <div class="card-label">Score trend</div>
-        <div class="bar-track" id="bar-track">
-          <div class="sbar" style="height:40%"></div>
+      <!-- Upload & Analyse card — styled with left accent border -->
+      <div class="card" id="ov-upload-section" style="border-left:3px solid var(--green);margin-bottom:12px">
+        <div style="margin-bottom:14px">
+          <div class="card-label" style="margin-bottom:2px">Upload & Analyse</div>
+          <div style="font-size:12px;color:var(--text-2)">Upload an observation photo to run YOLO analysis.</div>
         </div>
-        <div class="bar-labels" id="bar-labels"><span>—</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+          <!-- Drop zone + polygon -->
+          <div>
+            <label class="drop-zone" id="drop-ov2" for="fi-ov2" style="display:block;cursor:pointer;padding:16px">
+              <div class="drop-icon">↑</div>
+              <div class="drop-text">Drop photo or click</div>
+              <div class="drop-sub">JPG · PNG · HEIC</div>
+            </label>
+            <input type="file" id="fi-ov2" accept="image/*" style="display:none">
+            <div id="poly-wrap-ov" style="display:none;margin-top:0;border-radius:var(--r);overflow:hidden;border:1px solid var(--border);position:relative">
+              <canvas id="poly-canvas-ov" style="display:block;width:100%;cursor:crosshair"></canvas>
+              <div style="position:absolute;bottom:8px;left:8px;right:8px;display:flex;gap:6px">
+                <button onclick="polyUndoOv()" class="btn-secondary" style="flex:1;font-size:11px;padding:5px">↩</button>
+                <button onclick="polyClearOv()" class="btn-secondary" style="flex:1;font-size:11px;padding:5px">✕</button>
+                <button onclick="polyCloseOv()" class="btn-secondary" style="flex:1;font-size:11px;padding:5px;background:var(--green);color:#fff;border-color:var(--green)">✓</button>
+              </div>
+            </div>
+            <div id="poly-hint-ov" style="font-size:11px;color:var(--text-3);margin-top:6px;text-align:center;display:none">Click to add points · close shape to confirm</div>
+          </div>
+          <!-- Meta fields -->
+          <div id="meta-fields-ov" style="display:none">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+              <div>
+                <div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:3px">Date</div>
+                <input type="date" id="obs-date-ov" class="field-input" style="width:100%;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-family:inherit">
+              </div>
+              <div>
+                <div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:3px">Time</div>
+                <input type="time" id="obs-time-ov" class="field-input" style="width:100%;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-family:inherit">
+              </div>
+            </div>
+            <div style="margin-bottom:8px">
+              <div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:3px">Sample</div>
+              <select id="sel-ov2" style="width:100%;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);appearance:none;font-family:inherit">
+                <option value="MYC-A1">MYC-A1</option>
+                <option value="MYC-A2">MYC-A2</option>
+                <option value="MYC-B">MYC-B</option>
+                <option value="WOOD-1">WOOD-1</option>
+                <option value="__new__">+ Create new…</option>
+              </select>
+              <div id="new-sample-row-ov2" style="display:none;margin-top:6px">
+                <input id="new-sample-input-ov2" type="text" placeholder="e.g. MYC-C" style="width:100%;font-size:12px;padding:6px 8px;border:1px solid var(--green);border-radius:var(--r);background:var(--surface);color:var(--text);font-family:inherit;outline:none">
+              </div>
+            </div>
+            <button class="btn-primary" id="btn-ov2" style="width:100%;font-size:12px;padding:8px" disabled>Run analysis</button>
+            <div id="st-ov2" style="font-size:11px;color:var(--text-3);margin-top:6px;min-height:14px"></div>
+          </div>
+          <!-- Result preview (small, inside upload card) -->
+          <div id="ov2-empty" style="display:none"></div>
+          <div id="ov2-result-img-wrap" style="display:none;grid-column:1/-1;margin-top:8px">
+            <canvas id="ov2-result-canvas" style="display:block;width:100%;border-radius:var(--r);border:1px solid var(--border)"></canvas>
+          </div>
+          <div id="ov2-det-result" style="display:none;grid-column:1/-1">
+            <div id="ov2-dlist"></div>
+          </div>
+        </div>
       </div>
 
-      <!-- Prediction + Weather unified card -->
-      <div class="card" id="pred-card-wrapper">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-          <div class="card-label" style="margin-bottom:0">Health prediction</div>
-          <div id="pred-weather-badge" style="display:none;font-size:10px;padding:3px 10px;border-radius:99px;background:var(--blue-bg);color:var(--blue);font-weight:600">📡 weather-adjusted</div>
+      <!-- Sensor & Weather card — styled with left accent border -->
+      <div class="card" style="border-left:3px solid var(--green)">
+        <div style="margin-bottom:12px">
+          <div class="card-label" style="margin-bottom:2px">Sensor & Weather</div>
+          <div style="font-size:12px;color:var(--text-2)">Environmental data inputs for precision health scoring.</div>
         </div>
 
-        <!-- Weather fetch — triggers prediction update -->
-        <div style="background:var(--bg);border-radius:var(--r);padding:10px 12px;margin-bottom:14px;border:1px solid var(--border)">
+        <!-- Weather -->
+        <div style="margin-bottom:14px">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-            <div style="font-size:11px;font-weight:600;color:var(--text-2)">Local weather <span style="color:var(--text-3);font-weight:400">· required for prediction</span></div>
+            <div style="font-size:11px;font-weight:600;color:var(--text-2)">Local weather</div>
             <button onclick="fetchWeather()" id="weather-btn"
-              style="font-size:11px;padding:4px 11px;background:var(--surface);color:var(--green);border:1px solid #C4DECE;border-radius:var(--r);cursor:pointer;font-family:inherit;font-weight:600">
+              style="font-size:11px;padding:4px 10px;background:var(--green-bg);color:var(--green);border:1px solid #C4DECE;border-radius:var(--r);cursor:pointer;font-family:inherit;font-weight:600">
               📍 Get location
             </button>
           </div>
-          <div id="weather-panel" style="display:none">
-            <div style="display:flex;gap:12px;flex-wrap:wrap">
-              <span style="font-size:12px;color:var(--text)" id="w-temp-inline">—</span>
-              <span style="font-size:12px;color:var(--text-2)" id="w-hum-inline">—</span>
-              <span style="font-size:12px;color:var(--text-2)" id="w-desc-inline">—</span>
-              <span style="font-size:11px;color:var(--text-3)" id="w-loc-inline">—</span>
+          <div id="weather-panel" style="display:none;background:var(--bg);border-radius:var(--r);padding:8px 10px;border:1px solid var(--border)">
+            <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:12px">
+              <span id="w-temp-inline" style="color:var(--text);font-weight:500">—</span>
+              <span id="w-hum-inline" style="color:var(--text-2)">—</span>
+              <span id="w-desc-inline" style="color:var(--text-2)">—</span>
+              <span id="w-loc-inline" style="color:var(--text-3);font-size:11px">—</span>
             </div>
           </div>
-          <div id="weather-st" style="font-size:10px;color:var(--text-3);margin-top:2px">Fetch your location to enable weather-adjusted predictions.</div>
+          <div id="weather-st" style="font-size:10px;color:var(--text-3);margin-top:3px">Fetch location to enable weather-adjusted predictions.</div>
         </div>
 
-        <!-- Sensor precision note -->
-        <div id="sensor-precision-note" style="display:none;background:var(--green-bg);border-radius:var(--r);padding:8px 12px;margin-bottom:14px;font-size:11px;color:var(--green);line-height:1.5">
-          📡 <strong>Precision mode:</strong> This sample has <span id="sensor-reading-count">0</span>/3 sensor readings — <span id="sensor-precision-status">collect 3 readings for enhanced accuracy</span>
+        <!-- Divider -->
+        <div style="border-top:1px solid var(--border);margin-bottom:12px"></div>
+
+        <!-- 1-min reading -->
+        <div>
+          <div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:6px">1-min sensor reading</div>
+          <button id="sensor-btn" onclick="triggerSensor()" style="width:100%;font-size:12px;padding:8px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:var(--r);cursor:pointer;font-family:inherit;font-weight:500">
+            ⬤ Start 1-min reading
+          </button>
+          <div style="margin-top:8px;display:none;background:var(--bg);border-radius:var(--r);padding:8px;border:1px solid var(--border)" id="sensor-prog-wrap">
+            <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden">
+              <div id="sensor-prog" style="height:100%;background:var(--green);width:0%;transition:width 1s linear"></div>
+            </div>
+          </div>
+          <div id="sensor-st" style="font-size:11px;color:var(--text-3);margin-top:6px;min-height:14px"></div>
+          <div style="margin-top:8px;padding:8px;background:var(--bg);border-radius:var(--r);border:1px solid var(--border)">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+              <div><div style="font-size:10px;color:var(--text-3)">Surface hum</div><div style="font-size:13px;font-weight:600;color:var(--text)" id="r-surf">—</div></div>
+              <div><div style="font-size:10px;color:var(--text-3)">Env hum</div><div style="font-size:13px;font-weight:600;color:var(--text)" id="r-env">—</div></div>
+              <div><div style="font-size:10px;color:var(--text-3)">Δ humidity</div><div style="font-size:13px;font-weight:600;color:var(--green)" id="r-delta">—</div></div>
+              <div><div style="font-size:10px;color:var(--text-3)">Temp</div><div style="font-size:13px;font-weight:600;color:var(--text)" id="r-temp">—</div></div>
+            </div>
+          </div>
+          <!-- Sensor precision note -->
+          <div id="sensor-precision-note" style="display:none;margin-top:8px;border-radius:var(--r);padding:8px 10px;font-size:11px;line-height:1.5">
+            📡 <strong>Precision mode:</strong> <span id="sensor-reading-count">0</span>/3 readings — <span id="sensor-precision-status">collect more for enhanced accuracy</span>
+          </div>
+          <div style="margin-top:8px;font-size:10px;color:var(--text-3);line-height:1.6">
+            After 3 consecutive readings for a sample, predictions switch to <strong style="color:var(--text-2)">precision mode</strong>.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ RIGHT COLUMN — RESULTS AREA ═══════════════════════════════ -->
+    <div>
+
+      <!-- Results area label -->
+      <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-3);margin-bottom:10px;padding-left:2px">Results</div>
+
+      <!-- Last analysis result -->
+      <div class="card" style="margin-bottom:12px">
+        <div class="card-label">Last analysis result</div>
+        <div id="ov-result-wrap" style="background:var(--bg);border-radius:var(--r);min-height:160px;display:flex;align-items:center;justify-content:center;color:var(--text-3);font-size:13px;border:1px solid var(--border)">
+          No analysis yet — upload a photo to begin
+        </div>
+        <div id="ov-det-list" style="margin-top:10px"></div>
+      </div>
+
+      <!-- Health score + Prediction unified -->
+      <div class="card" id="pred-card-wrapper" style="margin-bottom:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <div class="card-label" style="margin-bottom:0">Health score & Prediction</div>
+          <div id="pred-weather-badge" style="display:none;font-size:10px;padding:3px 8px;border-radius:99px;background:var(--blue-bg);color:var(--blue);font-weight:600">📡 weather-adjusted</div>
+        </div>
+
+        <!-- Score + bar -->
+        <div style="display:flex;align-items:flex-end;gap:16px;margin-bottom:14px">
+          <div>
+            <div class="big-num" id="score-num" style="font-size:36px;line-height:1">—<span class="big-unit" style="font-size:14px">/ 100</span></div>
+            <div class="num-meta" id="score-meta" style="font-size:11px;margin-top:2px">Awaiting observation</div>
+          </div>
+          <div style="flex:1;padding-bottom:4px">
+            <div class="bar-track" id="bar-track" style="height:40px">
+              <div class="sbar" style="height:40%"></div>
+            </div>
+            <div class="bar-labels" id="bar-labels" style="font-size:9px"><span>—</span></div>
+          </div>
         </div>
 
         <!-- Prediction grid -->
@@ -643,196 +753,46 @@ select:focus { outline: none; border-color: var(--green); }
             <div class="pred-period">Now</div>
             <div class="pred-score" id="pred-now">—</div>
             <div class="pred-label" id="pred-now-l">No data</div>
-            <div class="pred-note" id="pred-now-weather" style="margin-top:6px;font-size:10px;color:var(--text-3)"></div>
+            <div id="pred-now-weather" style="margin-top:4px;font-size:9px;color:var(--text-3)"></div>
           </div>
           <div class="pred-card" id="pred-3d-card">
             <div class="pred-period">3 days</div>
             <div class="pred-score" id="pred-3d">—</div>
             <div class="pred-label" id="pred-3d-l">No data</div>
-            <div class="pred-note" id="pred-3d-weather" style="margin-top:6px;font-size:10px;color:var(--text-3)"></div>
+            <div id="pred-3d-weather" style="margin-top:4px;font-size:9px;color:var(--text-3)"></div>
           </div>
           <div class="pred-card" id="pred-1w-card">
             <div class="pred-period">7 days</div>
             <div class="pred-score" id="pred-1w">—</div>
             <div class="pred-label" id="pred-1w-l">No data</div>
-            <div class="pred-note" id="pred-1w-weather" style="margin-top:6px;font-size:10px;color:var(--text-3)"></div>
+            <div id="pred-1w-weather" style="margin-top:4px;font-size:9px;color:var(--text-3)"></div>
           </div>
         </div>
-        <div class="pred-note" id="pred-note" style="margin-top:10px;text-align:center;font-size:11px;color:var(--text-3)">Fetch location to activate weather-adjusted predictions.</div>
+        <div class="pred-note" id="pred-note" style="margin-top:10px;font-size:11px;color:var(--text-3);text-align:center">Fetch location to activate weather-adjusted predictions.</div>
       </div>
-    </div>
 
-    <!-- Right: Sensor + Alerts -->
-    <div style="display:flex;flex-direction:column;gap:16px">
-      <div class="card">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-          <div class="card-label" style="margin-bottom:0">Sensor readings</div>
-          <button class="sensor-trigger-btn" id="sensor-btn" onclick="triggerSensor()" style="width:auto;margin-top:0">
-            ⬤ Start 1-min reading
-          </button>
-        </div>
-        <div class="sensor-progress"><div class="sensor-progress-fill" id="sensor-prog"></div></div>
-        <div class="st-msg" id="sensor-st"></div>
-        <div class="reading"><span class="r-label">Temperature</span><span class="r-val" id="r-temp">—<span class="r-unit">°C</span></span></div>
-        <div class="reading"><span class="r-label">Surface humidity · COM7</span><span class="r-val" id="r-surf">—<span class="r-unit">%</span></span></div>
-        <div class="reading"><span class="r-label">Environment humidity · COM4</span><span class="r-val" id="r-env">—<span class="r-unit">%</span></span></div>
-        <div class="reading"><span class="r-label">Δ humidity</span><span class="r-val" id="r-delta">—<span class="r-unit">%</span></span></div>
-        <div class="reading"><span class="r-label">Pressure</span><span class="r-val" id="r-pres">—<span class="r-unit">hPa</span></span></div>
-
-        <!-- 1-min sensor reading note -->
-        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
-          <div style="font-size:11px;color:var(--text-3);line-height:1.6">
-            After 3 consecutive 1-min readings for a sample, health prediction switches to <strong style="color:var(--text-2)">precision mode</strong> with sensor-calibrated accuracy.
-          </div>
-        </div>
-      </div>
+      <!-- Alerts -->
       <div class="card">
         <div class="card-label">Alerts & observations</div>
-        <div id="alert-list"><div class="st-msg">Loading…</div></div>
+        <div id="alert-list">
+          <div class="alert"><div class="a-dot ok"></div><div><div class="a-title">No data yet</div><div class="a-meta">Upload a photo to see alerts</div></div></div>
+        </div>
       </div>
+
     </div>
   </div>
 
-  <!-- Row 2: Timeline full width -->
-  <div class="card" style="margin-bottom:16px">
-    <div style="margin-bottom:14px">
+  <!-- Sample timeline strip — full width below both columns -->
+  <div class="card" style="margin-top:16px">
+    <div style="margin-bottom:12px">
       <div class="card-label" style="margin-bottom:0">Sample timeline · recent observations</div>
     </div>
     <div class="tl-grid" id="tl-strip"></div>
   </div>
 
-  <!-- Row 2b: Inline Upload & Analyse -->
-  <div class="card" style="margin-bottom:16px" id="ov-upload-section">
-    <div style="margin-bottom:18px">
-      <div class="card-label" style="margin-bottom:4px">Upload & Analyse</div>
-      <div style="font-size:13px;color:var(--text-2)">Upload a new observation photo and run YOLO analysis directly from the overview.</div>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:20px;align-items:start">
-
-      <!-- Left: upload zone + meta -->
-      <div>
-        <label class="drop-zone" id="drop-ov2" for="fi-ov2" style="display:block;cursor:pointer;padding:20px">
-          <div class="drop-icon">↑</div>
-          <div class="drop-text">Drop photo or click to select</div>
-          <div class="drop-sub">JPG · PNG · HEIC</div>
-        </label>
-        <input type="file" id="fi-ov2" accept="image/*" style="display:none">
-
-        <!-- Polygon canvas for OV upload -->
-        <div id="poly-wrap-ov" style="display:none;margin-top:0;border-radius:var(--r);overflow:hidden;border:1px solid var(--border);position:relative">
-          <canvas id="poly-canvas-ov" style="display:block;width:100%;cursor:crosshair"></canvas>
-          <div style="position:absolute;bottom:8px;left:8px;right:8px;display:flex;gap:6px">
-            <button onclick="polyUndoOv()" class="btn-secondary" style="flex:1;font-size:11px;padding:5px">↩ Undo</button>
-            <button onclick="polyClearOv()" class="btn-secondary" style="flex:1;font-size:11px;padding:5px">✕ Clear</button>
-            <button onclick="polyCloseOv()" class="btn-secondary" style="flex:1;font-size:11px;padding:5px;background:var(--green);color:#fff;border-color:var(--green)">✓ Close</button>
-          </div>
-        </div>
-        <div id="poly-hint-ov" style="font-size:11px;color:var(--text-3);margin-top:6px;text-align:center;display:none">
-          Click to add points · close shape to confirm selection
-        </div>
-
-        <div id="meta-fields-ov" style="display:none;margin-top:12px">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-            <div>
-              <div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:4px">Date</div>
-              <input type="date" id="obs-date-ov" class="field-input" style="width:100%;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-family:inherit">
-            </div>
-            <div>
-              <div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:4px">Time</div>
-              <input type="time" id="obs-time-ov" class="field-input" style="width:100%;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-family:inherit">
-            </div>
-          </div>
-          <div>
-            <div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:4px">Sample</div>
-            <select id="sel-ov2" style="width:100%;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);appearance:none;font-family:inherit">
-              <option value="MYC-A1">MYC-A1</option>
-              <option value="MYC-A2">MYC-A2</option>
-              <option value="MYC-B">MYC-B</option>
-              <option value="WOOD-1">WOOD-1</option>
-              <option value="__new__">+ Create new…</option>
-            </select>
-            <div id="new-sample-row-ov2" style="display:none;margin-top:8px">
-              <input id="new-sample-input-ov2" type="text" placeholder="e.g. MYC-C"
-                style="width:100%;font-size:13px;padding:8px 10px;border:1px solid var(--green);border-radius:var(--r);background:var(--surface);color:var(--text);font-family:inherit;outline:none">
-            </div>
-          </div>
-          <button class="btn-primary" id="btn-ov2" style="margin-top:10px;width:100%" disabled>Run analysis</button>
-          <div id="st-ov2" style="font-size:12px;color:var(--text-3);margin-top:8px;min-height:16px"></div>
-        </div>
-      </div>
-
-      <!-- Right: result display -->
-      <div>
-        <div id="ov2-empty" style="aspect-ratio:4/3;background:var(--bg);border-radius:var(--r);display:flex;align-items:center;justify-content:center;color:var(--text-3);font-size:13px;border:1px solid var(--border)">
-          Upload a photo to begin analysis
-        </div>
-        <div id="ov2-result-img-wrap" style="display:none">
-          <canvas id="ov2-result-canvas" style="display:block;width:100%;border-radius:var(--r);border:1px solid var(--border)"></canvas>
-        </div>
-        <div id="ov2-det-result" style="display:none;margin-top:14px">
-          <div class="card-label" style="margin-bottom:8px">Detection summary</div>
-          <div id="ov2-dlist"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Row 3: Community contribution panel -->
-  <div class="card" style="margin-bottom:16px">
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start">
-
-      <!-- Left: text + CTA -->
-      <div>
-        <div class="card-label">Help us build a better model</div>
-        <div style="font-size:22px;font-weight:600;color:var(--text);margin-bottom:10px;line-height:1.3">
-          Contribute your mycelium observations
-        </div>
-        <div style="font-size:14px;color:var(--text-2);line-height:1.7;margin-bottom:16px">
-          This detection model improves with every new image it learns from.
-          If you are working with mycelium — whether in a lab, studio, or field setting —
-          your photos can help train a more accurate, more diverse model.
-          Upload a specimen photo, draw regions, and label what you see.
-          It takes less than two minutes.
-        </div>
-        <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px">
-          <div style="text-align:center">
-            <div style="font-size:32px;font-weight:300;color:var(--green)" id="ov-contrib-total">—</div>
-            <div style="font-size:11px;color:var(--text-3);margin-top:2px">contributors</div>
-          </div>
-          <div style="width:1px;height:40px;background:var(--border)"></div>
-          <div style="text-align:center">
-            <div style="font-size:32px;font-weight:300;color:var(--text)" id="ov-contrib-locs">—</div>
-            <div style="font-size:11px;color:var(--text-3);margin-top:2px">locations worldwide</div>
-          </div>
-        </div>
-        <button onclick="showTab('contribute',document.querySelector('.tab:nth-child(5)'))"
-          style="font-size:13px;font-weight:600;padding:11px 24px;background:var(--green);color:#fff;border:none;border-radius:var(--r);cursor:pointer;transition:opacity .15s"
-          onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
-          Contribute an observation →
-        </button>
-      </div>
-
-      <!-- Right: Leaflet world map -->
-      <div>
-        <div id="contrib-leaflet-map"></div>
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px">
-          <div style="font-size:10px;color:var(--text-3)">© OpenStreetMap contributors</div>
-          <div style="font-size:11px;color:var(--text-3)">
-            <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--text-3);margin-right:3px"></span>
-            Unknown location: <strong id="unknown-count" style="color:var(--text-2)">—</strong>
-          </div>
-        </div>
-      </div>
-
-    </div>
-  </div>
-
-
-
 </div>
 </div>
 
-<!-- ══ TIMELINE ══ -->
 <div id="page-timeline" class="page">
 <div class="main">
   <!-- Sample filter tabs -->
