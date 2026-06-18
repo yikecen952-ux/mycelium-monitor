@@ -1,4 +1,5 @@
 import os
+import sys
 import uuid
 import sqlite3
 import base64
@@ -12,6 +13,9 @@ from functools import wraps
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from ultralytics import YOLO
+
+# Force unbuffered output so Railway logs show print() immediately
+sys.stdout.reconfigure(line_buffering=True)
 
 app = Flask(__name__)
 CORS(app)
@@ -801,7 +805,7 @@ def upload_to_roboflow(image_path, annotations, image_filename):
         img_b64 = base64.b64encode(img_f.read()).decode()
 
     resp = req_lib.post(upload_url, json={"image": img_b64}, timeout=30)
-    print(f"Roboflow response: {resp.status_code} {resp.text[:300]}")
+    print(f"Roboflow response: {resp.status_code} {resp.text[:300]}", flush=True)
     if resp.status_code not in (200, 201):
         raise Exception(f"Roboflow upload failed: {resp.status_code} {resp.text[:200]}")
 
@@ -852,14 +856,15 @@ def contribute():
     save_path = os.path.join(UPLOAD_FOLDER, filename)
     file.save(save_path)
 
+    print(f"📥 Contribute received: {filename}, {len(annotations)} annotations", flush=True)
     roboflow_id    = None
     roboflow_error = None
     try:
         roboflow_id = upload_to_roboflow(save_path, annotations, filename)
-        print(f"✅ Roboflow upload success: {roboflow_id}")
+        print(f"✅ Roboflow upload success: {roboflow_id}", flush=True)
     except Exception as e:
         roboflow_error = str(e)
-        print(f"❌ Roboflow upload failed: {roboflow_error}")
+        print(f"❌ Roboflow upload failed: {roboflow_error}", flush=True)
 
     conn = get_db()
     conn.execute("""
