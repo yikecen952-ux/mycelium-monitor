@@ -795,30 +795,59 @@ ROBOFLOW_PROJECT  = "mycelium-detection"
 
 
 def upload_to_roboflow(image_path, annotations, image_filename):
+    """Upload image to Roboflow using base64 as raw POST body (correct method)."""
     import requests as req_lib
+
+    with open(image_path, "rb") as img_f:
+        img_b64 = base64.b64encode(img_f.read()).decode("ascii")
 
     upload_url = (
         f"https://api.roboflow.com/dataset/{ROBOFLOW_PROJECT}/upload"
         f"?api_key={ROBOFLOW_API_KEY}&name={image_filename}&split=train"
     )
-    with open(image_path, "rb") as img_f:
-        img_b64 = base64.b64encode(img_f.read()).decode()
 
-    resp = req_lib.post(upload_url, json={"image": img_b64}, timeout=30)
+    # Roboflow expects base64 string as raw body with form-urlencoded content type
+    resp = req_lib.post(
+        upload_url,
+        data=img_b64,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        timeout=60
+    )
     print(f"Roboflow response: {resp.status_code} {resp.text[:300]}", flush=True)
     if resp.status_code not in (200, 201):
         raise Exception(f"Roboflow upload failed: {resp.status_code} {resp.text[:200]}")
 
     result   = resp.json()
-    image_id = result.get("id") or result.get("imageId") or result.get("image", {}).get("id") or str(result)
+    image_id = result.get("id") or result.get("imageId") or result.get("image", {}).get("id")
 
+    # Upload annotations if present
     if annotations and image_id:
-        ann_url = (
-            f"https://api.roboflow.com/dataset/{ROBOFLOW_PROJECT}/annotate/{image_id}"
-            f"?api_key={ROBOFLOW_API_KEY}"
-        )
-        rf_anns = [{"label": a["label"], "points": a["points"], "type": "polygon"} for a in annotations]
-        req_lib.post(ann_url, json={"annotations": rf_anns}, timeout=15)
+        try:
+            # Build YOLO-format annotation text for polygon segments
+            ann_lines = []
+            label_map = {"healthy_mycelium":0, "dry_aged_mycelium":1,
+                         "contamination_risk":2, "exposed_substrate":3}
+            for a in annotations:
+                cls_idx = label_map.get(a["label"], 0)
+                pts = a.get("points", [])
+                if len(pts) >= 3:
+                    coords = " ".join(f"{p['x']:.6f} {p['y']:.6f}" for p in pts)
+                    ann_lines.append(f"{cls_idx} {coords}")
+            if ann_lines:
+                ann_text = "\n".join(ann_lines)
+                ann_url = (
+                    f"https://api.roboflow.com/dataset/{ROBOFLOW_PROJECT}/annotate/{image_id}"
+                    f"?api_key={ROBOFLOW_API_KEY}&name={image_filename}.txt"
+                )
+                ann_resp = req_lib.post(
+                    ann_url,
+                    data=ann_text,
+                    headers={"Content-Type": "text/plain"},
+                    timeout=30
+                )
+                print(f"Roboflow annotation response: {ann_resp.status_code} {ann_resp.text[:200]}", flush=True)
+        except Exception as ann_err:
+            print(f"Annotation upload error (image still uploaded): {ann_err}", flush=True)
 
     return image_id
 
