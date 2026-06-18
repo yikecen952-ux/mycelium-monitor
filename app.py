@@ -20,10 +20,13 @@ sys.stdout.reconfigure(line_buffering=True)
 app = Flask(__name__)
 CORS(app)
 
-UPLOAD_FOLDER = "uploads"
-DB_PATH       = "mycelium.db"
+# Use Railway persistent volume if available, else local (for dev)
+DATA_DIR      = "/app/data" if os.path.isdir("/app/data") else "."
+UPLOAD_FOLDER = os.path.join(DATA_DIR, "uploads")
+DB_PATH       = os.path.join(DATA_DIR, "mycelium.db")
 SECRET_KEY    = os.environ.get("JWT_SECRET", "symbioframe_secret_key_2026_secure")   # JWT signing key
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+print(f"📁 Data directory: {DATA_DIR}", flush=True)
 
 model = YOLO("best.pt")
 print("✅ Model loaded")
