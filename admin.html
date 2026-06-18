@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SYMBIO-FRAME · Admin</title>
+<style>
+  :root {
+    --bg: #F8F8F6; --surface: #fff; --text: #1A1A1A; --text-2: #555;
+    --text-3: #999; --border: #E5E5E2; --green: #4A7C59; --green-bg: #EDF3EE;
+    --r: 8px; --shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5;
+    padding: 0;
+  }
+  .topbar {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 16px 32px; display: flex; align-items: center; justify-content: space-between;
+  }
+  .topbar h1 { font-size: 16px; font-weight: 600; }
+  .topbar .sub { font-size: 12px; color: var(--text-3); margin-top: 2px; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 32px; }
+
+  /* Login */
+  #login-view { max-width: 360px; margin: 80px auto; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--r); padding: 28px; box-shadow: var(--shadow);
+  }
+  .card h2 { font-size: 18px; margin-bottom: 6px; }
+  .card p { font-size: 13px; color: var(--text-2); margin-bottom: 20px; }
+  label { font-size: 11px; font-weight: 600; color: var(--text-2); display: block; margin-bottom: 5px; }
+  input {
+    width: 100%; font-size: 13px; padding: 9px 12px; margin-bottom: 14px;
+    border: 1px solid var(--border); border-radius: var(--r);
+    background: var(--surface); color: var(--text); font-family: inherit;
+  }
+  input:focus { outline: none; border-color: var(--green); }
+  button {
+    font-family: inherit; cursor: pointer; border: none; border-radius: var(--r);
+    font-weight: 600; transition: opacity 0.15s;
+  }
+  button:hover { opacity: 0.88; }
+  .btn-primary { background: var(--text); color: #fff; padding: 10px 20px; font-size: 13px; width: 100%; }
+  .btn-green { background: var(--green); color: #fff; padding: 10px 20px; font-size: 13px; }
+  .err { font-size: 12px; color: #B3261E; min-height: 16px; margin-bottom: 8px; }
+
+  /* Dashboard */
+  #admin-view { display: none; }
+  .stats-row { display: flex; gap: 16px; margin-bottom: 24px; }
+  .stat {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--r); padding: 16px 20px; flex: 1;
+  }
+  .stat .num { font-size: 28px; font-weight: 600; }
+  .stat .label { font-size: 12px; color: var(--text-3); margin-top: 2px; }
+  .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .toolbar h2 { font-size: 15px; }
+  .gallery {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+  }
+  .img-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--r); overflow: hidden;
+  }
+  .img-card img { width: 100%; height: 160px; object-fit: cover; display: block; background: var(--bg); }
+  .img-meta { padding: 10px 12px; }
+  .img-meta .sample { font-size: 13px; font-weight: 600; }
+  .img-meta .detail { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+  .img-meta .user { font-size: 11px; color: var(--green); margin-top: 4px; }
+  .dl-btn {
+    display: block; text-align: center; margin: 8px 12px 12px;
+    background: var(--green-bg); color: var(--green); padding: 6px;
+    font-size: 11px; font-weight: 600; border-radius: 6px; text-decoration: none;
+  }
+  .empty { text-align: center; color: var(--text-3); padding: 60px; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<!-- Login view -->
+<div id="login-view">
+  <div class="card">
+    <h2>Admin access</h2>
+    <p>SYMBIO-FRAME data management</p>
+    <label>Username</label>
+    <input id="u" type="text" placeholder="Kecen Yi" autocomplete="username">
+    <label>Password</label>
+    <input id="p" type="password" placeholder="Password" autocomplete="current-password">
+    <div class="err" id="err"></div>
+    <button class="btn-primary" onclick="login()">Sign in</button>
+  </div>
+</div>
+
+<!-- Admin dashboard -->
+<div id="admin-view">
+  <div class="topbar">
+    <div>
+      <h1>SYMBIO-FRAME · Admin</h1>
+      <div class="sub">Detection image management</div>
+    </div>
+    <button class="btn-green" onclick="downloadAll()">⬇ Download all images (ZIP)</button>
+  </div>
+  <div class="container">
+    <div class="stats-row">
+      <div class="stat"><div class="num" id="s-images">—</div><div class="label">Detection images</div></div>
+      <div class="stat"><div class="num" id="s-users">—</div><div class="label">Registered users</div></div>
+      <div class="stat"><div class="num" id="s-contribs">—</div><div class="label">Contributions</div></div>
+    </div>
+    <div class="toolbar">
+      <h2>All detection images</h2>
+      <span style="font-size:12px;color:var(--text-3)" id="img-count"></span>
+    </div>
+    <div class="gallery" id="gallery"></div>
+    <div class="empty" id="empty" style="display:none">No detection images yet.</div>
+  </div>
+</div>
+
+<script>
+const API = window.location.origin;
+let TOKEN = null;
+
+async function login() {
+  const u = document.getElementById('u').value.trim();
+  const p = document.getElementById('p').value.trim();
+  const err = document.getElementById('err');
+  err.textContent = '';
+  try {
+    const r = await fetch(`${API}/auth/login`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({username: u, password: p})
+    });
+    const d = await r.json();
+    if (!d.success) { err.textContent = d.error || 'Login failed'; return; }
+    if (!d.is_admin) { err.textContent = 'This account is not an admin.'; return; }
+    TOKEN = d.token;
+    document.getElementById('login-view').style.display = 'none';
+    document.getElementById('admin-view').style.display = 'block';
+    loadData();
+  } catch(e) { err.textContent = 'Cannot reach server.'; }
+}
+
+function authHeaders() { return { 'Authorization': 'Bearer ' + TOKEN }; }
+
+async function loadData() {
+  // Load images
+  try {
+    const r = await fetch(`${API}/admin/images`, { headers: authHeaders() });
+    const d = await r.json();
+    const imgs = d.images || [];
+    document.getElementById('s-images').textContent = imgs.length;
+    document.getElementById('img-count').textContent = imgs.length + ' images';
+    const gallery = document.getElementById('gallery');
+    const empty = document.getElementById('empty');
+    if (!imgs.length) { empty.style.display = 'block'; gallery.innerHTML = ''; }
+    else {
+      empty.style.display = 'none';
+      gallery.innerHTML = imgs.map(im => `
+        <div class="img-card">
+          <img src="${API}/image/${im.image_path}" loading="lazy"
+               onerror="this.style.display='none'">
+          <div class="img-meta">
+            <div class="sample">${im.sample_id || '—'}</div>
+            <div class="detail">${(im.timestamp||'').slice(0,16)} · ${im.yolo_state||'—'}</div>
+            <div class="user">${im.username || 'anonymous'}</div>
+          </div>
+          <a class="dl-btn" href="${API}/image/${im.image_path}" download>Download</a>
+        </div>
+      `).join('');
+    }
+  } catch(e) { console.error(e); }
+
+  // Load users count
+  try {
+    const r = await fetch(`${API}/admin/users`, { headers: authHeaders() });
+    const d = await r.json();
+    document.getElementById('s-users').textContent = (d.users||[]).length;
+  } catch(e) {}
+
+  // Load contributions count
+  try {
+    const r = await fetch(`${API}/contributions/stats`);
+    const d = await r.json();
+    document.getElementById('s-contribs').textContent = d.total ?? 0;
+  } catch(e) {}
+}
+
+async function downloadAll() {
+  // Fetch ZIP with auth header, then trigger download
+  try {
+    const r = await fetch(`${API}/admin/download-all`, { headers: authHeaders() });
+    if (!r.ok) { alert('Download failed'); return; }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'all_detection_images.zip';
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+  } catch(e) { alert('Download error: ' + e.message); }
+}
+
+// Enter key
+document.getElementById('p').addEventListener('keydown', e => { if(e.key==='Enter') login(); });
+</script>
+</body>
+</html>

@@ -1004,6 +1004,48 @@ def admin_images():
     return jsonify({"images": [dict(r) for r in rows]})
 
 
+# ── Admin: download all detection images as ZIP ───────────────────────────────
+@app.route("/admin/download-all", methods=["GET"])
+@require_admin
+def admin_download_all():
+    """Bundle all detection images into a ZIP for the admin to download."""
+    import zipfile
+    from io import BytesIO
+    from flask import send_file
+
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT d.image_path, d.sample_id, d.timestamp, d.yolo_state, u.username
+        FROM detections d
+        LEFT JOIN users u ON d.user_id = u.id
+        WHERE d.image_path IS NOT NULL
+        ORDER BY d.id DESC
+    """).fetchall()
+    conn.close()
+
+    mem = BytesIO()
+    with zipfile.ZipFile(mem, "w", zipfile.ZIP_DEFLATED) as zf:
+        for r in rows:
+            img_path = os.path.join(UPLOAD_FOLDER, r["image_path"])
+            if os.path.exists(img_path):
+                # Name: username_sample_date_originalname.jpg
+                safe_user = (r["username"] or "anon").replace(" ", "")
+                safe_date = (r["timestamp"] or "")[:10]
+                arcname = f"{safe_user}_{r['sample_id']}_{safe_date}_{r['image_path']}"
+                zf.write(img_path, arcname)
+    mem.seek(0)
+    return send_file(mem, mimetype="application/zip",
+                     as_attachment=True,
+                     download_name="all_detection_images.zip")
+
+
+# ── Admin page (HTML) ─────────────────────────────────────────────────────────
+@app.route("/admin", methods=["GET"])
+def admin_page():
+    from flask import send_from_directory
+    return send_from_directory(".", "admin.html")
+
+
 # ── Emergency: reset admin password (accessible without auth) ─────────────────
 @app.route("/reset-admin", methods=["POST"])
 def reset_admin():
