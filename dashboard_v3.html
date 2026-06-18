@@ -1479,6 +1479,7 @@ function selectTimelineRecord(recordId) {
   const rec = (window._records||[]).find(r=>r.id===recordId);
   if (!rec) return;
   window._currentDisplayRecord = recordId;
+  window._freshAnnotatedResult = false;
   const wrap = document.getElementById('ov-result-wrap');
   if (rec.image_path) {
     wrap.innerHTML = `<div style="position:relative">
@@ -1500,6 +1501,7 @@ function selectTimelineRecord(recordId) {
 
 function restoreLatestResult() {
   window._currentDisplayRecord = null;
+  window._freshAnnotatedResult = false;
   loadData();
 }
 
@@ -1672,9 +1674,9 @@ async function loadData() {
     set('r-env',(last.env_humidity??'—')+'<span class="r-unit">%</span>');
     set('r-pres','—<span class="r-unit">hPa</span>');
     set('r-delta',(d!==null&&d!==undefined?(d>0?'+':'')+d:'—')+'<span class="r-unit">%</span>');
-    if(!window._currentDisplayRecord){
+    if(!window._currentDisplayRecord && !window._freshAnnotatedResult){
       if(last.image_path){
-        document.getElementById('ov-result-wrap').innerHTML=`<img src="${API}/image/${last.image_path}" style="width:100%;border-radius:var(--r);border:1px solid var(--border)">`;
+        document.getElementById('ov-result-wrap').innerHTML=`<img src="${API}/image/${last.image_path}" style="width:100%;max-height:520px;object-fit:contain;display:block;border-radius:var(--r)">`;
       }
       const detListEl=document.getElementById('ov-det-list');
       if(detListEl) detListEl.innerHTML=`
@@ -2024,7 +2026,8 @@ if(btnUp) btnUp.addEventListener('click',async function(){
     resImg.onload=()=>{ gc.width=resImg.naturalWidth;gc.height=resImg.naturalHeight; const gx=gc.getContext('2d');gx.drawImage(resImg,0,0); gx.strokeStyle='rgba(255,255,255,0.4)';gx.lineWidth=1;gx.setLineDash([4,4]); for(let i=1;i<3;i++){gx.beginPath();gx.moveTo(i*gc.width/3,0);gx.lineTo(i*gc.width/3,gc.height);gx.stroke();gx.beginPath();gx.moveTo(0,i*gc.height/3);gx.lineTo(gc.width,i*gc.height/3);gx.stroke();} gx.setLineDash([]); };
     resImg.src='data:image/jpeg;base64,'+d.result_image;
     document.getElementById('grid-result-wrap').style.display='block'; document.getElementById('up-empty').style.display='none';
-    document.getElementById('ov-result-wrap').innerHTML=`<img src="data:image/jpeg;base64,${d.result_image}" style="width:100%;border-radius:var(--r);border:1px solid var(--border)">`;
+    window._freshAnnotatedResult = true;
+    document.getElementById('ov-result-wrap').innerHTML=`<img src="data:image/jpeg;base64,${d.result_image}" style="width:100%;max-height:520px;object-fit:contain;display:block;border-radius:var(--r)">`;
     document.getElementById('det-result-up').style.display='block';
     document.getElementById('dlist-up').innerHTML=`<div class="det-row"><span class="det-key">State</span>${badge(d.yolo_state)}</div><div class="det-row"><span class="det-key">Score</span><strong>${d.health_score}</strong></div><div class="det-row"><span class="det-key">Detections</span><span>${d.total_detections}</span></div>${d.detections.map(x=>`<div class="det-row" style="padding-left:12px"><span class="det-key" style="color:var(--text-3)">↳ ${stateLabel(x.class_name)}</span><span class="det-conf">${x.confidence}%</span></div>`).join('')}`;
     st.textContent='Analysis complete · '+(new Date().toLocaleTimeString()); st.style.color='var(--green)';
@@ -2087,6 +2090,7 @@ function drawPolyOv(mouse){
 function polyUndoOv(){if(polyClosedOv){polyClosedOv=false;}else{polyPointsOv.pop();}drawPolyOv();}
 function resetOv2Upload(){
   // Reset left upload panel to initial state
+  window._freshAnnotatedResult = false;
   polyPointsOv=[]; polyClosedOv=false; polyImgOv=null; polyListenersAddedOv=false;
   document.getElementById('drop-ov2').style.display='block';
   document.getElementById('poly-wrap-ov').style.display='none';
@@ -2122,6 +2126,7 @@ if(btnOv2) btnOv2.addEventListener('click',async function(){
       previewWrap.style.display = 'block';
     }
     // RIGHT panel: show YOLO annotated result image + metadata
+    window._freshAnnotatedResult = true;  // Keep annotated result visible, don't let loadData override
     document.getElementById('ov-result-wrap').innerHTML=`<img src="data:image/jpeg;base64,${d.result_image}" style="width:100%;max-height:520px;object-fit:contain;display:block;border-radius:var(--r)">`;
     const detListEl = document.getElementById('ov-det-list');
     if(detListEl) detListEl.innerHTML=`
