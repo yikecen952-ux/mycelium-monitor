@@ -605,7 +605,7 @@ select:focus { outline: none; border-color: var(--green); }
         <div style="margin-bottom:14px">
           <div class="card-label" style="margin-bottom:2px">Upload & Analyse</div>
           <div style="font-size:12px;color:var(--text-2);line-height:1.6">
-            Upload a photo, then <strong style="color:var(--text)">draw a polygon</strong> around the mycelium area you want to analyse — click to add points, click the first point to close the shape. Leave undrawn to analyse the full image.
+            Upload an observation photo and run YOLO analysis to detect the mycelium health state.
           </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
@@ -617,15 +617,9 @@ select:focus { outline: none; border-color: var(--green); }
               <div class="drop-sub">JPG · PNG · HEIC</div>
             </label>
             <input type="file" id="fi-ov2" accept="image/*" style="display:none">
-            <div id="poly-wrap-ov" style="display:none;margin-top:0;border-radius:var(--r);overflow:hidden;border:1px solid var(--border);position:relative">
-              <canvas id="poly-canvas-ov" style="display:block;width:100%;cursor:crosshair"></canvas>
-              <div style="position:absolute;bottom:8px;left:8px;right:8px;display:flex;gap:6px">
-                <button onclick="polyUndoOv()" class="btn-secondary" style="flex:1;font-size:11px;padding:5px">↩</button>
-                <button onclick="polyClearOv()" class="btn-secondary" style="flex:1;font-size:11px;padding:5px">✕</button>
-                <button onclick="polyCloseOv()" class="btn-secondary" style="flex:1;font-size:11px;padding:5px;background:var(--green);color:#fff;border-color:var(--green)">✓</button>
-              </div>
+            <div id="poly-wrap-ov" style="display:none;margin-top:0;border-radius:var(--r);overflow:hidden;border:1px solid var(--border)">
+              <img id="poly-img-ov" style="display:block;width:100%;max-height:300px;object-fit:contain;background:var(--bg)">
             </div>
-            <div id="poly-hint-ov" style="font-size:11px;color:var(--text-3);margin-top:6px;text-align:center;display:none">Click to add points · close shape to confirm</div>
           </div>
           <!-- Meta fields -->
           <div id="meta-fields-ov" style="display:none">
@@ -2051,66 +2045,37 @@ function initPolyOv(file){
   polyImgOv=new Image();polyImgOv._file=file;
   polyImgOv.onload=function(){
     document.getElementById('drop-ov2').style.display='none';
-    // Show original image preview immediately on upload
-    const _prevWrap = document.getElementById('ov2-preview-wrap');
-    const _prevImg  = document.getElementById('ov2-preview-img');
-    if(_prevWrap && _prevImg){ _prevImg.src = polyImgOv.src; _prevWrap.style.display='block'; }
+    // Show image preview (no polygon drawing)
     const wrap=document.getElementById('poly-wrap-ov');wrap.style.display='block';
-    polyCanvasOv=document.getElementById('poly-canvas-ov');polyCanvasOv.width=polyImgOv.naturalWidth;polyCanvasOv.height=polyImgOv.naturalHeight;
-    polyCtxOv=polyCanvasOv.getContext('2d');polyPointsOv=[];polyClosedOv=false;drawPolyOv();
-    document.getElementById('poly-hint-ov').style.display='block';
+    const previewImg=document.getElementById('poly-img-ov');
+    if(previewImg) previewImg.src=polyImgOv.src;
     document.getElementById('meta-fields-ov').style.display='block';
     const now=new Date();
     document.getElementById('obs-date-ov').value=now.toISOString().slice(0,10);
     document.getElementById('obs-time-ov').value=now.toTimeString().slice(0,5);
     document.getElementById('btn-ov2').disabled=false;
-    if(!polyListenersAddedOv){addPolyListenersOv();polyListenersAddedOv=true;}
   };
   const reader=new FileReader();reader.onload=e=>{polyImgOv.src=e.target.result;};reader.readAsDataURL(file);
 }
-function getPolyPosOv(e){const r=polyCanvasOv.getBoundingClientRect();const sx=polyCanvasOv.width/r.width;const sy=polyCanvasOv.height/r.height;return{x:(e.clientX-r.left)*sx,y:(e.clientY-r.top)*sy};}
-function addPolyListenersOv(){
-  polyCanvasOv.addEventListener('click',e=>{
-    if(polyClosedOv)return;const p=getPolyPosOv(e);
-    if(polyPointsOv.length>=3){const sc=polyCanvasOv.getBoundingClientRect().width/polyCanvasOv.width;const dist=Math.sqrt((p.x-polyPointsOv[0].x)**2+(p.y-polyPointsOv[0].y)**2);if(dist<15/sc){polyCloseOv();return;}}
-    polyPointsOv.push(p);drawPolyOv();
-  });
-  polyCanvasOv.addEventListener('mousemove',e=>{if(polyClosedOv||polyPointsOv.length===0)return;drawPolyOv(getPolyPosOv(e));});
-}
-function drawPolyOv(mouse){
-  polyCtxOv.clearRect(0,0,polyCanvasOv.width,polyCanvasOv.height);polyCtxOv.drawImage(polyImgOv,0,0);
-  if(!polyPointsOv.length)return;
-  const G='#4A7C59';const sc=polyCanvasOv.width/600;
-  polyCtxOv.strokeStyle=G;polyCtxOv.lineWidth=Math.max(3,4*sc);polyCtxOv.setLineDash(polyClosedOv?[]:[Math.round(12*sc),Math.round(6*sc)]);polyCtxOv.fillStyle='rgba(74,124,89,0.15)';
-  polyCtxOv.beginPath();polyCtxOv.moveTo(polyPointsOv[0].x,polyPointsOv[0].y);polyPointsOv.slice(1).forEach(p=>polyCtxOv.lineTo(p.x,p.y));
-  if(polyClosedOv){polyCtxOv.closePath();polyCtxOv.fill();}else if(mouse)polyCtxOv.lineTo(mouse.x,mouse.y);
-  polyCtxOv.stroke();polyCtxOv.setLineDash([]);
-  polyPointsOv.forEach((p,i)=>{polyCtxOv.beginPath();const r=Math.max(8,(i===0?16:10)*sc);polyCtxOv.arc(p.x,p.y,r,0,Math.PI*2);polyCtxOv.fillStyle=i===0?G:'#fff';polyCtxOv.strokeStyle=G;polyCtxOv.lineWidth=Math.max(3,4*sc);polyCtxOv.fill();polyCtxOv.stroke();});
-}
-function polyUndoOv(){if(polyClosedOv){polyClosedOv=false;}else{polyPointsOv.pop();}drawPolyOv();}
+
 function resetOv2Upload(){
   // Reset left upload panel to initial state
   window._freshAnnotatedResult = false;
-  polyPointsOv=[]; polyClosedOv=false; polyImgOv=null; polyListenersAddedOv=false;
+  polyImgOv=null;
   document.getElementById('drop-ov2').style.display='block';
   document.getElementById('poly-wrap-ov').style.display='none';
-  document.getElementById('poly-hint-ov').style.display='none';
   document.getElementById('meta-fields-ov').style.display='none';
-  document.getElementById('ov2-preview-wrap').style.display='none';
   document.getElementById('btn-ov2').disabled=true;
   document.getElementById('btn-reupload-ov2').style.display='none';
   document.getElementById('st-ov2').textContent='';
   document.getElementById('fi-ov2').value='';
 }
-function polyClearOv(){polyPointsOv=[];polyClosedOv=false;drawPolyOv();}
-function polyCloseOv(){if(polyPointsOv.length<3)return;polyClosedOv=true;drawPolyOv();}
 const btnOv2=document.getElementById('btn-ov2');
 if(btnOv2) btnOv2.addEventListener('click',async function(){
   if(!polyImgOv||!polyImgOv._file)return;
   this.disabled=true;this.textContent='Analysing…';
   const st=document.getElementById('st-ov2');st.textContent='';st.style.color='var(--text-3)';
   let fileToSend=polyImgOv._file;
-  if(polyClosedOv&&polyPointsOv.length>=3){fileToSend=await cropToPolygon(polyImgOv,polyPointsOv);}
   const date=document.getElementById('obs-date-ov').value;const time=document.getElementById('obs-time-ov').value;
   const sid=getSelectedSampleId('sel-ov2','new-sample-input-ov2');
   const fd=new FormData();fd.append('image',fileToSend);fd.append('sample_id',sid);
@@ -2275,17 +2240,36 @@ const ACHIEVE_MILESTONES=[
   {count:5,icon:'⭐',title:'Core contributor',desc:'Five contributions! You are one of the most active members of the dataset community.'},
   {count:10,icon:'🏅',title:'Dataset champion',desc:'Ten contributions submitted. Your work is significantly expanding the diversity of the training data.'},
 ];
-function showAchievement(count,roboflowLinked){
+function showAchievement(sessionCount, globalTotal, justSubmitted){
   const banner=document.getElementById('contrib-achievement');if(!banner)return;
-  let milestone=null;for(const m of ACHIEVE_MILESTONES)if(count>=m.count)milestone=m;
-  if(!milestone)milestone={icon:'🍄',title:'Contribution received!',desc:'Your image has been added to the dataset.'};
+  let milestone=null;for(const m of ACHIEVE_MILESTONES)if(sessionCount>=m.count)milestone=m;
+  if(!milestone)milestone={icon:'🍄',title:'Thank you for contributing!'};
+
   document.getElementById('achieve-icon').textContent=milestone.icon;
-  document.getElementById('achieve-title').textContent=milestone.title;
-  document.getElementById('achieve-desc').textContent=milestone.desc+(roboflowLinked?' Synced to Roboflow ✓':'');
+  document.getElementById('achieve-title').textContent='Thank you for your contribution!';
+
+  // Build the thank-you message with the global contribution number
+  let msg = '';
+  if(justSubmitted && justSubmitted > 1){
+    msg = `Your ${justSubmitted} images have been added to the shared dataset and synced to the training pipeline. `;
+  } else {
+    msg = `Your image has been added to the shared dataset and synced to the training pipeline. `;
+  }
+  if(globalTotal){
+    // Ordinal suffix
+    const n = globalTotal;
+    const ord = (n%10===1&&n%100!==11)?'st':(n%10===2&&n%100!==12)?'nd':(n%10===3&&n%100!==13)?'rd':'th';
+    msg += `This is the ${n}${ord} contribution to the dataset — every image helps the model learn to recognise mycelium health more accurately.`;
+  } else {
+    msg += `Every image helps the model learn to recognise mycelium health more accurately.`;
+  }
+  document.getElementById('achieve-desc').textContent = msg;
+
   const pipRow=document.getElementById('achieve-pip-row');pipRow.innerHTML='';
-  for(let i=0;i<Math.min(count,10);i++){const pip=document.createElement('div');pip.style.cssText=`width:8px;height:8px;border-radius:50%;background:var(--green)`;pipRow.appendChild(pip);}
-  if(count>10){const extra=document.createElement('span');extra.textContent=`+${count-10}`;extra.style.cssText='font-size:10px;color:var(--text-3);margin-left:4px';pipRow.appendChild(extra);}
-  document.getElementById('achieve-count-label').textContent=count===1?'1 contribution this session':`${count} contributions this session`;
+  for(let i=0;i<Math.min(sessionCount,10);i++){const pip=document.createElement('div');pip.style.cssText=`width:8px;height:8px;border-radius:50%;background:var(--green)`;pipRow.appendChild(pip);}
+  if(sessionCount>10){const extra=document.createElement('span');extra.textContent=`+${sessionCount-10}`;extra.style.cssText='font-size:10px;color:var(--text-3);margin-left:4px';pipRow.appendChild(extra);}
+  document.getElementById('achieve-count-label').textContent=sessionCount===1?'Your 1st contribution this session':`${sessionCount} contributions this session`;
+
   banner.style.display='block';banner.style.opacity='0';banner.style.transform='translateY(6px)';
   requestAnimationFrame(()=>{banner.style.transition='opacity 0.4s ease,transform 0.4s ease';banner.style.opacity='1';banner.style.transform='translateY(0)';});
 }
@@ -2310,7 +2294,7 @@ async function submitAllContributions(){
     const fd=new FormData();fd.append('image',item.file);fd.append('contributor',contributor);fd.append('location',location);fd.append('lat',lat);fd.append('lng',lng);fd.append('mycelium_type',myc_type);fd.append('notes',notes);fd.append('annotations',JSON.stringify(annsForBackend));
     try{
       const r=await authFetch(`${API}/contribute`,{method:'POST',body:fd});
-      const d=await r.json();if(d.success){successCount++;window._sessionContribs=(window._sessionContribs||0)+1;}
+      const d=await r.json();if(d.success){successCount++;window._sessionContribs=(window._sessionContribs||0)+1; if(d.total_contributions) window._globalContribTotal=d.total_contributions;}
     }catch(e){console.warn('Failed',i,e);}
   }
   window._queue=[];window._queueIdx=0;cAnnotations=[];cPoints=[];cClosed=false;
@@ -2318,7 +2302,7 @@ async function submitAllContributions(){
   document.getElementById('contrib-annotate-card').style.display='none';
   document.getElementById('contrib-info-card').style.display='none';
   updateQueueUI();st.textContent='';btn.textContent='Submit another observation';btn.disabled=false;
-  showAchievement(window._sessionContribs,true);loadContribStats();
+  showAchievement(window._sessionContribs, window._globalContribTotal, successCount);loadContribStats();
 }
 
 // ── Admin panel placeholder ───────────────────────────────────────────────────
