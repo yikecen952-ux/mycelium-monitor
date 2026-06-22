@@ -21,3 +21,6 @@ yolo11n.pt
 # Old files
 record_sensor.py
 test.html
+
+# Claude Code local memory (do not push)
+.claude/

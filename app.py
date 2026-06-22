@@ -136,7 +136,46 @@ def init_db():
         )
     """)
 
+    # ── Samples (identity cards) ────────────────────────────────────────────
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS samples (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id      INTEGER NOT NULL REFERENCES users(id),
+            sample_id    TEXT    NOT NULL,
+            name         TEXT,
+            description  TEXT,
+            cover_image  TEXT,
+            created_at   TEXT    NOT NULL,
+            UNIQUE(user_id, sample_id)
+        )
+    """)
+
+    # ── Sample files (humidity maps, CloudCompare results, 3D scan models) ─
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS sample_files (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id     INTEGER NOT NULL REFERENCES users(id),
+            sample_id   TEXT    NOT NULL,
+            file_type   TEXT    NOT NULL,
+            timestamp   TEXT    NOT NULL,
+            file_path   TEXT    NOT NULL,
+            notes       TEXT,
+            metadata    TEXT    DEFAULT '{}'
+        )
+    """)
+
     conn.commit()
+
+    # ── Auto-migrate: back-fill samples from existing detections ───────────
+    conn.execute("""
+        INSERT OR IGNORE INTO samples (user_id, sample_id, created_at)
+        SELECT user_id, sample_id, MIN(timestamp)
+        FROM detections
+        WHERE user_id IS NOT NULL AND sample_id IS NOT NULL AND sample_id != ''
+        GROUP BY user_id, sample_id
+    """)
+    conn.commit()
+    print("✅ Samples + sample_files tables ready")
 
     # ── Migrations: add missing columns to existing tables ─────────────────
     # Safe: ALTER TABLE ADD COLUMN is ignored if column already exists via try/except
@@ -510,6 +549,10 @@ def detect():
 
         conn = get_db()
         conn.execute("""
+            INSERT OR IGNORE INTO samples (user_id, sample_id, created_at)
+            VALUES (?, ?, ?)
+        """, (user_id, sample_id, timestamp))
+        conn.execute("""
             INSERT INTO detections
                 (user_id, sample_id, model_type, timestamp, image_path,
                  yolo_state, health_score, temp_c, env_humidity, surface_humidity,
@@ -719,19 +762,165 @@ def samples():
     conn    = get_db()
 
     if request.method == "GET":
-        rows = conn.execute(
-            "SELECT DISTINCT sample_id FROM detections WHERE user_id=? ORDER BY sample_id",
-            (user_id,)
-        ).fetchall()
+        rows = conn.execute("""
+            SELECT s.sample_id, s.name, s.description, s.cover_image, s.created_at,
+                   latest.timestamp    AS latest_ts,
+                   latest.yolo_state   AS latest_state,
+                   latest.health_score AS latest_score,
+                   latest.image_path   AS latest_image_path
+            FROM samples s
+            LEFT JOIN detections latest ON latest.id = (
+                SELECT id FROM detections
+                WHERE user_id = s.user_id AND sample_id = s.sample_id
+                ORDER BY id DESC LIMIT 1
+            )
+            WHERE s.user_id = ?
+            ORDER BY COALESCE(latest.timestamp, s.created_at) DESC
+        """, (user_id,)).fetchall()
         conn.close()
-        return jsonify({"samples": [r[0] for r in rows]})
+        return jsonify({"samples": [dict(r) for r in rows]})
     else:
-        data = request.get_json()
-        sid  = (data.get("sample_id") or "").strip().upper().replace(" ", "-")
-        conn.close()
+        data        = request.get_json() or {}
+        sid         = (data.get("sample_id") or "").strip().upper().replace(" ", "-")
         if not sid:
+            conn.close()
             return jsonify({"error": "sample_id required"}), 400
+        name        = (data.get("name") or "").strip() or None
+        description = (data.get("description") or "").strip() or None
+        now         = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        try:
+            conn.execute("""
+                INSERT INTO samples (user_id, sample_id, name, description, created_at)
+                VALUES (?, ?, ?, ?, ?)
+            """, (user_id, sid, name, description, now))
+            conn.commit()
+        except sqlite3.IntegrityError:
+            pass  # Already exists — fine
+        conn.close()
         return jsonify({"success": True, "sample_id": sid})
+
+
+# ── Sample detail — full archive ──────────────────────────────────────────────
+@app.route("/samples/<sample_id>", methods=["GET"])
+@require_auth
+def sample_detail(sample_id):
+    user    = get_current_user()
+    user_id = user["user_id"]
+    conn    = get_db()
+
+    meta = conn.execute(
+        "SELECT * FROM samples WHERE user_id=? AND sample_id=?",
+        (user_id, sample_id)
+    ).fetchone()
+    if not meta:
+        conn.close()
+        return jsonify({"error": "Sample not found"}), 404
+
+    det_rows = conn.execute("""
+        SELECT id, timestamp, yolo_state, health_score, image_path, notes,
+               surface_humidity, env_humidity, delta_humidity, temp_c
+        FROM detections
+        WHERE user_id=? AND sample_id=?
+        ORDER BY timestamp ASC
+    """, (user_id, sample_id)).fetchall()
+
+    file_rows = conn.execute("""
+        SELECT id, file_type, timestamp, file_path, notes, metadata
+        FROM sample_files
+        WHERE user_id=? AND sample_id=?
+        ORDER BY timestamp ASC
+    """, (user_id, sample_id)).fetchall()
+    conn.close()
+
+    files_by_type = {"humidity_map": [], "cloudcompare": [], "scan_model": []}
+    for row in file_rows:
+        ft = row["file_type"]
+        if ft in files_by_type:
+            files_by_type[ft].append(dict(row))
+
+    return jsonify({
+        "sample":        dict(meta),
+        "detections":    [dict(r) for r in det_rows],
+        "humidity_maps": files_by_type["humidity_map"],
+        "cloudcompare":  files_by_type["cloudcompare"],
+        "scan_models":   files_by_type["scan_model"],
+    })
+
+
+# ── Sample files — upload ─────────────────────────────────────────────────────
+@app.route("/sample-files", methods=["POST"])
+@require_auth
+def upload_sample_file():
+    user    = get_current_user()
+    user_id = user["user_id"]
+
+    if "file" not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+
+    file      = request.files["file"]
+    sample_id = request.form.get("sample_id", "").strip()
+    file_type = request.form.get("file_type", "").strip()
+    notes     = request.form.get("notes", "")
+    metadata  = request.form.get("metadata", "{}")
+    timestamp = request.form.get("timestamp") or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    if not sample_id:
+        return jsonify({"error": "sample_id required"}), 400
+    if file_type not in ("humidity_map", "cloudcompare", "scan_model"):
+        return jsonify({"error": "file_type must be humidity_map, cloudcompare, or scan_model"}), 400
+
+    try:
+        json.loads(metadata)
+    except Exception:
+        metadata = "{}"
+
+    ext       = os.path.splitext(file.filename)[1].lower() or ".bin"
+    filename  = f"{file_type}_{uuid.uuid4().hex}{ext}"
+    save_path = os.path.join(UPLOAD_FOLDER, filename)
+    file.save(save_path)
+
+    conn = get_db()
+    conn.execute("""
+        INSERT OR IGNORE INTO samples (user_id, sample_id, created_at)
+        VALUES (?, ?, ?)
+    """, (user_id, sample_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+    conn.execute("""
+        INSERT INTO sample_files
+            (user_id, sample_id, file_type, timestamp, file_path, notes, metadata)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (user_id, sample_id, file_type, timestamp, filename, notes, metadata))
+    conn.commit()
+    conn.close()
+
+    print(f"✅ Sample file uploaded: {file_type} / {filename}", flush=True)
+    return jsonify({"success": True, "file_path": filename, "file_type": file_type})
+
+
+# ── Sample files — list ───────────────────────────────────────────────────────
+@app.route("/sample-files/<sample_id>", methods=["GET"])
+@require_auth
+def get_sample_files(sample_id):
+    user      = get_current_user()
+    user_id   = user["user_id"]
+    file_type = request.args.get("type")
+    conn      = get_db()
+
+    if file_type:
+        rows = conn.execute("""
+            SELECT id, file_type, timestamp, file_path, notes, metadata
+            FROM sample_files
+            WHERE user_id=? AND sample_id=? AND file_type=?
+            ORDER BY timestamp ASC
+        """, (user_id, sample_id, file_type)).fetchall()
+    else:
+        rows = conn.execute("""
+            SELECT id, file_type, timestamp, file_path, notes, metadata
+            FROM sample_files
+            WHERE user_id=? AND sample_id=?
+            ORDER BY timestamp ASC
+        """, (user_id, sample_id)).fetchall()
+    conn.close()
+    return jsonify({"files": [dict(r) for r in rows]})
 
 
 # ── Sensor direct entry (legacy /sensor endpoint, now auth-gated) ─────────────
