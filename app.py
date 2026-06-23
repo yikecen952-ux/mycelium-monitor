@@ -172,6 +172,7 @@ def init_db():
         SELECT user_id, sample_id, MIN(timestamp)
         FROM detections
         WHERE user_id IS NOT NULL AND sample_id IS NOT NULL AND sample_id != ''
+          AND UPPER(sample_id) != 'QUICK-CHECK'
         GROUP BY user_id, sample_id
     """)
     conn.commit()
@@ -509,7 +510,9 @@ def detect():
 
         result_filename = f"result_{os.path.splitext(filename)[0]}.jpg"
         result_path     = os.path.join(UPLOAD_FOLDER, result_filename)
-        result.save(filename=result_path)
+        # Custom rendering: thin lines, class label only (no confidence score)
+        import cv2 as _cv2
+        _cv2.imwrite(result_path, result.plot(conf=False, line_width=2))
 
         img_h, img_w = result.orig_shape[:2]
         img_area = img_w * img_h if img_w * img_h > 0 else 1
@@ -548,10 +551,12 @@ def detect():
         yolo_state   = main_state(detections)
 
         conn = get_db()
-        conn.execute("""
-            INSERT OR IGNORE INTO samples (user_id, sample_id, created_at)
-            VALUES (?, ?, ?)
-        """, (user_id, sample_id, timestamp))
+        # Only auto-create a sample record for real sample IDs, not Quick Check
+        if sample_id and sample_id.upper() != 'QUICK-CHECK':
+            conn.execute("""
+                INSERT OR IGNORE INTO samples (user_id, sample_id, created_at)
+                VALUES (?, ?, ?)
+            """, (user_id, sample_id, timestamp))
         conn.execute("""
             INSERT INTO detections
                 (user_id, sample_id, model_type, timestamp, image_path,
@@ -780,19 +785,33 @@ def samples():
         conn.close()
         return jsonify({"samples": [dict(r) for r in rows]})
     else:
-        data        = request.get_json() or {}
-        sid         = (data.get("sample_id") or "").strip().upper().replace(" ", "-")
+        # Support both multipart/form-data (with cover image) and plain JSON
+        cover_image_path = None
+        if request.content_type and "multipart" in request.content_type:
+            sid         = (request.form.get("sample_id") or "").strip().upper().replace(" ", "-")
+            name        = (request.form.get("name") or "").strip() or None
+            description = (request.form.get("description") or "").strip() or None
+            cf = request.files.get("cover_image")
+            if cf and cf.filename:
+                ext = os.path.splitext(cf.filename)[1].lower() or ".jpg"
+                cover_fname = f"cover_{uuid.uuid4().hex}{ext}"
+                cf.save(os.path.join(UPLOAD_FOLDER, cover_fname))
+                cover_image_path = cover_fname
+        else:
+            data        = request.get_json() or {}
+            sid         = (data.get("sample_id") or "").strip().upper().replace(" ", "-")
+            name        = (data.get("name") or "").strip() or None
+            description = (data.get("description") or "").strip() or None
+
         if not sid:
             conn.close()
             return jsonify({"error": "sample_id required"}), 400
-        name        = (data.get("name") or "").strip() or None
-        description = (data.get("description") or "").strip() or None
-        now         = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         try:
             conn.execute("""
-                INSERT INTO samples (user_id, sample_id, name, description, created_at)
-                VALUES (?, ?, ?, ?, ?)
-            """, (user_id, sid, name, description, now))
+                INSERT INTO samples (user_id, sample_id, name, description, cover_image, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (user_id, sid, name, description, cover_image_path, now))
             conn.commit()
         except sqlite3.IntegrityError:
             pass  # Already exists — fine

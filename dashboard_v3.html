@@ -167,7 +167,7 @@ body {
 
 /* ── Sections ─────────────────────────────────────────────────── */
 section { scroll-margin-top: 106px; }
-.page-wrap { max-width: 1280px; margin: 0 auto; padding: 52px 40px 72px; }
+.page-wrap { max-width: 1280px; margin: 0 auto; padding: 72px 40px 104px; }
 
 /* ── Typography ───────────────────────────────────────────────── */
 .eyebrow {
@@ -175,16 +175,16 @@ section { scroll-margin-top: 106px; }
   text-transform: uppercase; color: var(--brown-md); margin-bottom: 8px;
 }
 .section-title {
-  font-size: 34px; font-weight: 300; color: var(--brown-dk);
+  font-size: 34px; font-weight: 700; color: var(--text);
   letter-spacing: -.5px; line-height: 1.2; margin-bottom: 8px;
 }
 .section-sub { font-size: 14px; color: var(--text-2); line-height: 1.6; max-width: 520px; }
 
 /* ── Cards ────────────────────────────────────────────────────── */
 .card {
-  background: var(--surface); border: 1px solid var(--brown-lt);
+  background: var(--surface); border: none;
   border-radius: var(--r-lg); padding: 24px 28px;
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 2px 16px rgba(50,30,10,.07), 0 1px 4px rgba(50,30,10,.04);
 }
 .card-label {
   font-size: 10px; font-weight: 700; letter-spacing: .08em;
@@ -220,7 +220,7 @@ section { scroll-margin-top: 106px; }
 .drop-icon { font-size: 28px; color: var(--brown-lt); margin-bottom: 10px; }
 .drop-text { font-size: 14px; font-weight: 500; color: var(--text-2); }
 .drop-sub  { font-size: 12px; color: var(--brown-md); margin-top: 4px; }
-input[type="file"] { display: none; }
+/* file inputs visible by default; #qc-fi is hidden via inline style on the element */
 
 /* ── Badges ───────────────────────────────────────────────────── */
 .badge {
@@ -264,26 +264,69 @@ input[type="file"] { display: none; }
 ════════════════════════════════════════════════════════════════ */
 .qc-header { margin-bottom: 44px; }
 
-.qc-body {
-  display: grid; grid-template-columns: 1fr 1.35fr; gap: 24px; align-items: start;
+/* Fixed-height two-column layout */
+.qc-cols {
+  display: grid; grid-template-columns: 1fr 1.35fr; gap: 24px;
 }
-
-.qc-result-empty {
-  min-height: 340px; border-radius: var(--r);
-  background: var(--surface-2); border: 1px solid var(--brown-lt);
+.qc-col {
+  height: 380px; position: relative; overflow: hidden;
+  background: var(--surface); border-radius: var(--r-lg);
+  box-shadow: 0 2px 16px rgba(50,30,10,.07), 0 1px 4px rgba(50,30,10,.04);
+}
+.qc-col-label {
+  position: absolute; top: 16px; left: 20px; z-index: 2;
+  font-size: 10px; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--brown-md);
+}
+/* Drop zone covers the full column */
+.qc-drop-inner {
+  position: absolute; inset: 0;
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
-  color: var(--brown-md); gap: 10px;
+  cursor: pointer; gap: 10px;
+  transition: background .15s;
 }
+.qc-drop-inner:hover, .qc-drop-inner.over { background: var(--cream); }
+/* Preview and result images fill the column */
+.qc-col-img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: contain; background: #f5f2ed;
+  display: none;
+}
+/* Empty state (right col default) */
+.qc-empty-inner {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  background: var(--surface-2); color: var(--brown-md); gap: 10px;
+}
+/* Guest gate fills column */
+.qc-gate-inner {
+  position: absolute; inset: 0;
+  display: none; align-items: center; justify-content: center;
+  background: var(--surface-2); padding: 24px;
+}
+/* Controls strip below both columns */
+.qc-controls {
+  margin-top: 16px; padding: 18px 24px;
+  display: none; align-items: flex-end; gap: 20px; flex-wrap: wrap;
+  background: var(--surface); border-radius: var(--r-lg);
+  box-shadow: 0 2px 16px rgba(50,30,10,.07), 0 1px 4px rgba(50,30,10,.04);
+}
+/* Result detail strip below controls */
+.qc-det-strip {
+  margin-top: 12px; padding: 22px 28px;
+  display: flex; align-items: flex-start; gap: 32px; flex-wrap: wrap;
+  background: var(--surface); border-radius: var(--r-lg);
+  box-shadow: 0 2px 16px rgba(50,30,10,.07), 0 1px 4px rgba(50,30,10,.04);
+}
+
+.qc-result-empty { display: none; } /* legacy — kept for JS refs, hidden */
 .qc-result-empty-icon { font-size: 36px; opacity: .4; }
 .qc-result-empty-text { font-size: 13px; }
 
-#qc-result-img {
-  width: 100%; display: block;
-  max-height: 500px; object-fit: contain;
-  border-radius: var(--r);
-  border: 1px solid var(--brown-lt);
-}
+#qc-result-img { display: none; } /* position handled inline now */
 
 .score-big {
   font-size: 56px; font-weight: 200; line-height: 1;
@@ -320,7 +363,6 @@ input[type="file"] { display: none; }
 ════════════════════════════════════════════════════════════════ */
 #my-samples {
   background: var(--surface-2);
-  border-top: 2px solid var(--brown-lt);
 }
 
 /* ── MS navigation ──────────────────────────────────────────── */
@@ -340,15 +382,46 @@ input[type="file"] { display: none; }
 }
 .btn-ms-new:hover { background: var(--brown-dk); color: #fff; }
 
+/* ── L1 two-pane layout ─────────────────────────────────────── */
+.ms-l1-panes {
+  display: grid; grid-template-columns: 300px 1fr; gap: 20px;
+}
+.ms-l1-left {
+  /* shows ~4 cards (≈100px each), then scroll */
+  max-height: 408px; overflow-y: auto;
+}
+.ms-l1-right {
+  background: var(--surface); border-radius: var(--r-lg);
+  box-shadow: 0 2px 16px rgba(50,30,10,.07), 0 1px 4px rgba(50,30,10,.04);
+  padding: 24px 28px; overflow-y: auto;
+  /* same height as 4 cards in left pane */
+  height: 408px;
+}
+.ms-l1-preview-empty {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  height: 280px; gap: 14px;
+  color: var(--brown-md); text-align: center; font-size: 13px;
+}
+.ms-preview-scroll {
+  display: flex; gap: 12px; overflow-x: auto;
+  padding-bottom: 8px; margin-top: 16px;
+}
+.ms-preview-card {
+  flex-shrink: 0; width: 140px;
+}
+
 /* ── L1 sample cards ────────────────────────────────────────── */
 .ms-card {
   display: flex; align-items: center; gap: 18px;
-  padding: 16px 20px; border: 1px solid var(--brown-lt);
+  padding: 16px 20px; border: none;
   border-radius: var(--r); background: var(--surface);
   cursor: pointer; margin-bottom: 10px;
-  transition: border-color .15s, box-shadow .15s;
+  transition: box-shadow .15s, background .15s;
+  box-shadow: 0 1px 6px rgba(50,30,10,.06);
 }
-.ms-card:hover { border-color: var(--brown-md); box-shadow: var(--shadow-sm); }
+.ms-card:hover { box-shadow: 0 2px 12px rgba(50,30,10,.10); }
+.ms-card.selected { background: var(--cream); box-shadow: 0 0 0 2px var(--brown-dk), 0 2px 12px rgba(50,30,10,.08); }
 .ms-card-thumb {
   width: 56px; height: 56px; border-radius: 6px;
   object-fit: cover; background: var(--surface-2);
@@ -367,8 +440,9 @@ input[type="file"] { display: none; }
 /* ── L2 4-zone row ──────────────────────────────────────────── */
 .ms-l2-row {
   display: grid; grid-template-columns: 200px 1fr 1fr 1fr;
-  border: 1px solid var(--brown-lt); border-radius: var(--r-lg);
-  overflow: hidden; background: var(--surface); box-shadow: var(--shadow-sm);
+  border: none; border-radius: var(--r-lg);
+  overflow: hidden; background: var(--surface);
+  box-shadow: 0 2px 16px rgba(50,30,10,.07), 0 1px 4px rgba(50,30,10,.04);
 }
 .ms-l2-zone { padding: 24px 24px 28px; border-right: 1px solid var(--brown-lt); }
 .ms-l2-zone:last-child { border-right: none; }
@@ -547,7 +621,6 @@ input[type="file"] { display: none; }
 ════════════════════════════════════════════════════════════════ */
 #contribute {
   background: var(--surface);
-  border-top: 2px solid var(--brown-lt);
 }
 
 /* ── Contribute L1 ──────────────────────────────────────────── */
@@ -675,86 +748,76 @@ input[type="file"] { display: none; }
     <p class="section-sub">Upload any mycelium specimen photo for an immediate YOLO detection and health score. No sample tracking required.</p>
   </div>
 
-  <div class="qc-body">
+  <!-- Fixed-height two-column boxes -->
+  <div class="qc-cols">
 
-    <!-- Left: upload -->
-    <div>
-      <div class="card">
-        <div class="card-label">Specimen photo</div>
-
-        <!-- Drop zone -->
-        <label class="drop-zone" id="qc-drop" for="qc-fi">
-          <div class="drop-icon">↑</div>
-          <div class="drop-text">Drop photo or click to select</div>
-          <div class="drop-sub">JPG · PNG · HEIC</div>
-        </label>
-        <input type="file" id="qc-fi" accept="image/*">
-
-        <!-- Preview after load -->
-        <div id="qc-preview-wrap" style="display:none;border-radius:var(--r);overflow:hidden;border:1px solid var(--brown-lt)">
-          <img id="qc-preview-img" style="display:block;width:100%;max-height:300px;object-fit:contain;background:var(--cream)">
-        </div>
-
-        <!-- Meta + submit after load -->
-        <div id="qc-meta" style="display:none;margin-top:16px">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
-            <div>
-              <div class="field-label">Date</div>
-              <input type="date" id="qc-date" class="field-input" style="font-size:12px">
-            </div>
-            <div>
-              <div class="field-label">Time</div>
-              <input type="time" id="qc-time" class="field-input" style="font-size:12px">
-            </div>
-          </div>
-          <button class="btn-primary" id="qc-btn" disabled>Run analysis</button>
-          <div class="st-msg" id="qc-st"></div>
-          <button id="qc-reset-btn" onclick="resetQcUpload()" class="btn-ghost" style="display:none">↑ Upload another photo</button>
-        </div>
-
-        <!-- Guest gate -->
-        <div id="qc-gate" style="display:none">
-          <div class="signin-gate">
-            <h3>Sign in to analyse</h3>
-            <p>Upload observation photos and track mycelium health across your own samples over time.</p>
-            <button onclick="showAuthModal(true)" class="btn-primary" style="width:auto;padding:9px 24px;display:inline-block;margin-top:0">Get started — it's free</button>
-            <div style="margin-top:10px;font-size:11px;color:var(--text-3)">
-              Already have an account?
-              <span onclick="showAuthModal(false)" style="color:var(--brown-dk);cursor:pointer;text-decoration:underline">Sign in</span>
-            </div>
+    <!-- Left col: specimen upload -->
+    <div class="qc-col">
+      <span class="qc-col-label">Specimen photo</span>
+      <!-- Drop zone (default state) -->
+      <label class="qc-drop-inner" id="qc-drop" for="qc-fi">
+        <div class="drop-icon">↑</div>
+        <div class="drop-text">Drop photo or click to select</div>
+        <div class="drop-sub">JPG · PNG · HEIC</div>
+      </label>
+      <input type="file" id="qc-fi" accept="image/*" style="display:none">
+      <!-- Preview image (fills column after file select) -->
+      <img id="qc-preview-img" class="qc-col-img" alt="">
+      <!-- Guest gate (covers column for anonymous users) -->
+      <div id="qc-gate" class="qc-gate-inner">
+        <div class="signin-gate" style="margin-top:0;width:100%;max-width:300px">
+          <h3>Sign in to analyse</h3>
+          <p>Upload observation photos and track mycelium health across your own samples over time.</p>
+          <button onclick="showAuthModal(true)" class="btn-primary" style="width:auto;padding:9px 24px;display:inline-block;margin-top:0">Get started — it's free</button>
+          <div style="margin-top:10px;font-size:11px;color:var(--text-3)">
+            Already have an account?
+            <span onclick="showAuthModal(false)" style="color:var(--brown-dk);cursor:pointer;text-decoration:underline">Sign in</span>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Right: result -->
-    <div>
-      <div class="card">
-        <div class="card-label">Detection result</div>
-
-        <div id="qc-empty" class="qc-result-empty">
-          <div class="qc-result-empty-icon">○</div>
-          <div class="qc-result-empty-text">Upload a photo to begin</div>
-        </div>
-
-        <img id="qc-result-img" style="display:none">
-
-        <div id="qc-det-detail" style="display:none;margin-top:16px">
-          <div style="display:flex;align-items:flex-end;gap:18px;margin-bottom:16px">
-            <div>
-              <div class="score-big" id="qc-score">—<span class="score-unit">/ 100</span></div>
-              <div style="font-size:12px;color:var(--text-2);margin-top:4px" id="qc-state-text">—</div>
-            </div>
-            <div id="qc-badge"></div>
-          </div>
-          <div class="rule"></div>
-          <div id="qc-det-rows"></div>
-        </div>
-
+    <!-- Right col: detection result -->
+    <div class="qc-col">
+      <span class="qc-col-label">Detection result</span>
+      <!-- Empty state (default) -->
+      <div id="qc-empty" class="qc-empty-inner">
+        <div class="qc-result-empty-icon">○</div>
+        <div class="qc-result-empty-text">Upload a photo to begin</div>
       </div>
+      <!-- Annotated result image (fills column after detection) -->
+      <img id="qc-result-img" class="qc-col-img" alt="">
     </div>
 
-  </div><!-- /qc-body -->
+  </div><!-- /qc-cols -->
+
+  <!-- Controls strip (shown after image is selected) -->
+  <div class="qc-controls" id="qc-meta">
+    <div>
+      <div class="field-label">Date</div>
+      <input type="date" id="qc-date" class="field-input" style="font-size:12px;width:130px">
+    </div>
+    <div>
+      <div class="field-label">Time</div>
+      <input type="time" id="qc-time" class="field-input" style="font-size:12px;width:110px">
+    </div>
+    <button class="btn-primary" id="qc-btn" disabled style="width:auto;padding:9px 28px">Run analysis</button>
+    <div class="st-msg" id="qc-st" style="flex:1"></div>
+    <button id="qc-reset-btn" onclick="resetQcUpload()" class="btn-ghost" style="display:none;margin-left:auto">↑ Upload another photo</button>
+  </div>
+
+  <!-- Result detail strip (shown after detection) -->
+  <div id="qc-det-detail" style="display:none">
+    <div class="qc-det-strip">
+      <div>
+        <div class="score-big" id="qc-score">—<span class="score-unit">/ 100</span></div>
+        <div style="font-size:12px;color:var(--text-2);margin-top:4px" id="qc-state-text">—</div>
+      </div>
+      <div id="qc-badge" style="padding-top:6px"></div>
+      <div style="width:1px;background:var(--brown-lt);align-self:stretch;flex-shrink:0"></div>
+      <div id="qc-det-rows" style="flex:1;min-width:180px"></div>
+    </div>
+  </div>
 
   <!-- Stats strip -->
   <div class="stats-strip">
@@ -785,16 +848,16 @@ input[type="file"] { display: none; }
 ════════════════════════════════════════════════════════════ -->
 <section id="my-samples">
 
-  <!-- ─── LAYER 1: Sample overview list ──────────────────────── -->
+  <!-- ─── LAYER 1: Sample overview — two-pane ─────────────────── -->
   <div id="ms-l1">
   <div class="page-wrap">
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:44px">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:36px">
       <div>
         <div class="eyebrow">My Samples</div>
         <h2 class="section-title">Sample archive</h2>
-        <p class="section-sub">Each sample accumulates detection photos, humidity maps, and scan data over time.</p>
+        <p class="section-sub">Select a sample to preview its latest readings. Each specimen accumulates detection photos, humidity maps, and scan data over time — building a continuous health record you can tend and act on.</p>
       </div>
-      <button id="ms-new-btn" class="btn-ms-new" onclick="showCreateSampleModal()" style="display:none">+ New sample</button>
+      <button id="ms-new-btn" class="btn-ms-new" onclick="showCreateSampleModal()" style="display:none;margin-top:8px">+ New sample</button>
     </div>
 
     <!-- Guest gate -->
@@ -807,9 +870,20 @@ input[type="file"] { display: none; }
       </div>
     </div>
 
-    <!-- Sample list -->
+    <!-- Two-pane: left list + right preview -->
     <div id="ms-list-wrap" style="display:none">
-      <div id="ms-list"></div>
+      <div class="ms-l1-panes" id="ms-l1-panes">
+        <!-- Left: scrollable sample list -->
+        <div class="ms-l1-left" id="ms-list"></div>
+        <!-- Right: preview panel (populated on sample click) -->
+        <div class="ms-l1-right" id="ms-l1-preview">
+          <div class="ms-l1-preview-empty">
+            <div style="font-size:40px;opacity:.2;color:var(--brown-lt);margin-bottom:14px">○</div>
+            <div>Select a sample to preview</div>
+          </div>
+        </div>
+      </div>
+      <!-- Empty state (no samples yet) -->
       <div id="ms-list-empty" style="display:none">
         <div style="text-align:center;padding:64px 24px">
           <div style="font-size:40px;opacity:.2;color:var(--brown-lt);margin-bottom:18px">○</div>
@@ -837,7 +911,7 @@ input[type="file"] { display: none; }
   <!-- ─── LAYER 3: Full archive ───────────────────────────────── -->
   <div id="ms-l3" style="display:none">
   <div class="page-wrap">
-    <button class="ms-back-btn" onclick="backToMsL2()">← Sample overview</button>
+    <button class="ms-back-btn" onclick="backToMsL1()">← All samples</button>
     <div id="ms-l3-content"></div>
   </div>
   </div>
@@ -1032,10 +1106,18 @@ input[type="file"] { display: none; }
       <label class="ms-modal-lbl">Name <span style="color:var(--text-3)">(optional)</span></label>
       <input class="ms-modal-inp" id="cs-name" type="text" placeholder="e.g. Cube A — Humidity Batch">
     </div>
+    <div class="ms-modal-field">
+      <label class="ms-modal-lbl">Cover photo <span style="color:var(--text-3)">(optional)</span></label>
+      <input class="ms-modal-inp" id="cs-cover" type="file" accept="image/*" style="padding:6px 10px" onchange="previewCoverPhoto(this)">
+      <div class="ms-modal-note">ID photo of this specimen — shown as thumbnail in the archive.</div>
+      <div id="cs-cover-preview" style="display:none;margin-top:8px">
+        <img id="cs-cover-img" style="max-height:80px;border-radius:var(--r);object-fit:cover;display:block">
+      </div>
+    </div>
     <div class="ms-modal-err" id="cs-err"></div>
     <div class="ms-modal-row">
       <button class="ms-modal-cancel" onclick="closeCreateSampleModal()">Cancel</button>
-      <button class="ms-modal-ok" onclick="submitCreateSample()">Create sample</button>
+      <button class="ms-modal-ok" id="cs-submit-btn" onclick="submitCreateSample()">Create sample</button>
     </div>
   </div>
 </div>
@@ -1058,6 +1140,35 @@ input[type="file"] { display: none; }
     <div class="ms-modal-row">
       <button class="ms-modal-cancel" onclick="closeUploadFileModal()">Cancel</button>
       <button class="ms-modal-ok" id="uf-submit" onclick="submitUploadFile()">Upload</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Sensing Upload Modal ──────────────────────────────────── -->
+<div class="ms-modal-overlay" id="sensing-upload-modal">
+  <div class="ms-modal-card" style="max-width:480px">
+    <div class="ms-modal-title">Upload sensing CSV</div>
+    <div style="font-size:12px;color:var(--text-2);margin-bottom:18px;line-height:1.7">
+      Import surface or environment humidity readings exported from the ESP32 sensor scripts.<br>
+      <span style="color:var(--brown-md)">Surface CSV columns:</span> datetime, sample_id, temp_c, surface_humidity, pressure_hpa<br>
+      <span style="color:var(--brown-md)">Env CSV columns:</span> datetime, sample_id, temp_c, env_humidity, pressure_hpa
+    </div>
+    <div class="ms-modal-field">
+      <label class="ms-modal-lbl">CSV type</label>
+      <select class="ms-modal-inp" id="sv-type" style="padding:8px 10px">
+        <option value="surface">Surface sensing (surface_humidity)</option>
+        <option value="env">Environment sensing (env_humidity)</option>
+      </select>
+    </div>
+    <div class="ms-modal-field">
+      <label class="ms-modal-lbl">CSV file</label>
+      <input class="ms-modal-inp" id="sv-file" type="file" accept=".csv,text/csv" style="padding:6px 10px">
+    </div>
+    <input type="hidden" id="sv-sample-id">
+    <div class="ms-modal-err" id="sv-err"></div>
+    <div class="ms-modal-row">
+      <button class="ms-modal-cancel" onclick="closeSensingUploadModal()">Cancel</button>
+      <button class="ms-modal-ok" id="sv-submit" onclick="submitSensingUpload()">Import data</button>
     </div>
   </div>
 </div>
@@ -1253,15 +1364,12 @@ var _qcImg = null;
 
 function setQcGate(guestMode) {
   var drop = document.getElementById('qc-drop');
-  var fi   = document.getElementById('qc-fi');
   var gate = document.getElementById('qc-gate');
   if (guestMode) {
     if (drop) drop.style.display = 'none';
-    if (fi)   fi.style.display   = 'none';
-    if (gate) gate.style.display = 'block';
+    if (gate) gate.style.display = 'flex';
   } else {
-    if (drop) drop.style.display = 'block';
-    if (fi)   fi.style.display   = 'none'; /* hidden via CSS, label triggers it */
+    if (drop) drop.style.display = 'flex';
     if (gate) gate.style.display = 'none';
   }
 }
@@ -1273,9 +1381,10 @@ function loadQcImage(file) {
   img.onload = function() {
     _qcImg = img;
     document.getElementById('qc-drop').style.display = 'none';
-    document.getElementById('qc-preview-img').src = img.src;
-    document.getElementById('qc-preview-wrap').style.display = 'block';
-    document.getElementById('qc-meta').style.display = 'block';
+    var prev = document.getElementById('qc-preview-img');
+    prev.src = img.src;
+    prev.style.display = 'block';
+    document.getElementById('qc-meta').style.display = 'flex';
     document.getElementById('qc-btn').disabled = false;
     var now = new Date();
     document.getElementById('qc-date').value = now.toISOString().slice(0, 10);
@@ -1288,8 +1397,8 @@ function loadQcImage(file) {
 
 function resetQcUpload() {
   _qcImg = null;
-  document.getElementById('qc-drop').style.display = 'block';
-  document.getElementById('qc-preview-wrap').style.display = 'none';
+  document.getElementById('qc-drop').style.display = 'flex';
+  document.getElementById('qc-preview-img').style.display = 'none';
   document.getElementById('qc-meta').style.display = 'none';
   document.getElementById('qc-btn').disabled = true;
   document.getElementById('qc-reset-btn').style.display = 'none';
@@ -1402,22 +1511,27 @@ function renderMsL1(samples) {
   var loading = document.getElementById('ms-l1-loading');
   var wrap    = document.getElementById('ms-list-wrap');
   var empty   = document.getElementById('ms-list-empty');
+  var panes   = document.getElementById('ms-l1-panes');
   var list    = document.getElementById('ms-list');
   if (loading) loading.style.display = 'none';
   if (wrap)    wrap.style.display    = 'block';
   if (!samples.length) {
-    if (empty) empty.style.display = 'block';
-    if (list)  list.innerHTML = '';
+    if (empty)  empty.style.display  = 'block';
+    if (panes)  panes.style.display  = 'none';
+    if (list)   list.innerHTML = '';
     return;
   }
-  if (empty) empty.style.display = 'none';
+  if (empty)  empty.style.display  = 'none';
+  if (panes)  panes.style.display  = 'grid';
   if (!list) return;
   list.innerHTML = samples.map(function(s) {
-    var thumb = '<div class="ms-card-ph">○</div>';
+    var thumb = s.cover_image
+      ? '<img class="ms-card-thumb" src="' + API + '/image/' + escH(s.cover_image) + '" alt="" onerror="this.outerHTML=\'<div class=\\\"ms-card-ph\\\">○</div>\'">'
+      : '<div class="ms-card-ph">○</div>';
     var statusPart = s.latest_state
       ? badge(s.latest_state) + '<span style="margin-left:8px;font-size:11px;color:var(--text-3)">' + msDate(s.latest_ts) + '</span>'
       : '<span style="font-size:11px;color:var(--text-3)">No detections yet</span>';
-    return '<div class="ms-card" onclick="openMsL2(\'' + esc(s.sample_id) + '\')">'
+    return '<div class="ms-card" data-id="' + esc(s.sample_id) + '" onclick="loadMsPreview(\'' + esc(s.sample_id) + '\')">'
       + thumb
       + '<div style="flex:1;min-width:0">'
       + '<div class="ms-card-name">' + escH(s.name || s.sample_id) + '</div>'
@@ -1427,6 +1541,69 @@ function renderMsL1(samples) {
       + '<div class="ms-card-arrow">›</div>'
       + '</div>';
   }).join('');
+}
+
+async function loadMsPreview(sampleId) {
+  /* Highlight selected card */
+  document.querySelectorAll('.ms-card').forEach(function(c) { c.classList.remove('selected'); });
+  var card = document.querySelector('.ms-card[data-id="' + sampleId + '"]');
+  if (card) card.classList.add('selected');
+
+  _currentSampleId = sampleId;
+  var panel = document.getElementById('ms-l1-preview');
+  if (!panel) return;
+  panel.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-3);font-size:13px">Loading…</div>';
+
+  try {
+    var r = await authFetch(API + '/samples/' + encodeURIComponent(sampleId));
+    var d = await r.json();
+    if (!d.sample) throw new Error('Not found');
+    var s    = d.sample;
+    var dets = d.detections || [];
+
+    var coverHtml = s.cover_image
+      ? '<img src="' + API + '/image/' + escH(s.cover_image) + '" style="width:56px;height:56px;border-radius:var(--r);object-fit:cover;flex-shrink:0;background:var(--surface-2)" alt="" onerror="this.style.display=\'none\'">'
+      : '';
+    var html = '<div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--brown-lt)">'
+      + coverHtml
+      + '<div>'
+      + '<div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:6px">' + escH(s.name || s.sample_id) + '</div>'
+      + '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
+      + (s.latest_state ? badge(s.latest_state) : '')
+      + (s.latest_score != null ? '<span style="font-size:22px;font-weight:200;color:' + scoreColor(s.latest_score) + '">' + s.latest_score + '<span style="font-size:12px;color:var(--text-3)"> /100</span></span>' : '')
+      + '</div>'
+      + '</div></div>';
+
+    if (dets.length > 0) {
+      html += '<div style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--brown-md);margin-bottom:10px">Recent detections</div>';
+      html += '<div class="ms-preview-scroll">';
+      dets.slice(-8).reverse().forEach(function(det) {
+        var imgUrl = det.result_image_path
+          ? API + '/image/' + det.result_image_path
+          : (det.image_path ? API + '/image/result_' + det.image_path.replace(/\.[^.]+$/, '') + '.jpg' : null);
+        html += '<div class="ms-preview-card">';
+        if (imgUrl) {
+          html += '<img src="' + imgUrl + '" style="width:100%;height:110px;object-fit:cover;border-radius:var(--r);display:block;background:var(--surface-2)" onerror="this.style.display=\'none\'">';
+        } else {
+          html += '<div style="width:100%;height:110px;background:var(--surface-2);border-radius:var(--r);display:flex;align-items:center;justify-content:center;color:var(--brown-lt);font-size:24px">○</div>';
+        }
+        html += '<div style="margin-top:6px;font-size:11px;color:var(--text-3)">' + (det.timestamp ? det.timestamp.slice(0,10) : '—') + '</div>';
+        if (det.health_score != null) html += '<div style="font-size:12px;font-weight:500;color:' + scoreColor(det.health_score) + '">' + det.health_score + '/100</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+    } else {
+      html += '<div style="color:var(--text-3);font-size:13px;padding:16px 0">No detections yet — open the full archive to upload the first detection photo.</div>';
+    }
+
+    html += '<div style="margin-top:20px">'
+      + '<button onclick="openMsL2(\'' + esc(sampleId) + '\')" class="btn-primary" style="width:auto;padding:9px 24px">View full archive →</button>'
+      + '</div>';
+
+    panel.innerHTML = html;
+  } catch(e) {
+    panel.innerHTML = '<div style="color:var(--h-danger);font-size:13px;padding:20px">Failed to load: ' + e.message + '</div>';
+  }
 }
 
 async function openMsL2(sampleId) {
@@ -1455,7 +1632,10 @@ function renderMsL2(d) {
   var lastCC  = ccs.length  ? ccs[ccs.length - 1]   : null;
 
   /* Zone 1 — ID photo */
-  var z1 = '<div class="ms-l2-id-ph">○</div>'
+  var z1Cover = s.cover_image
+    ? '<img class="ms-l2-id-thumb" src="' + API + '/image/' + escH(s.cover_image) + '" alt="" onerror="this.outerHTML=\'<div class=\\\"ms-l2-id-ph\\\">○</div>\'">'
+    : '<div class="ms-l2-id-ph">○</div>';
+  var z1 = z1Cover
     + '<div class="ms-l2-name">' + escH(s.name || s.sample_id) + '</div>'
     + '<div class="ms-l2-sub">' + escH(s.sample_id) + ' · since ' + msDate(s.created_at) + '</div>';
 
@@ -1539,12 +1719,14 @@ function renderMsL3(d) {
   var sid  = s.sample_id || _currentSampleId;
   var dets = d.detections || [];
 
-  var headThumb = '<div class="ms-l3-head-ph">○</div>';
+  var headThumb = s.cover_image
+    ? '<img class="ms-l3-head-thumb" src="' + API + '/image/' + escH(s.cover_image) + '" alt="" onerror="this.outerHTML=\'<div class=\\\"ms-l3-head-ph\\\">○</div>\'">'
+    : '<div class="ms-l3-head-ph">○</div>';
 
   /* Detection grid */
-  var detInner;
+  var detGrid;
   if (dets.length) {
-    detInner = '<div class="ms-l3-grid">'
+    detGrid = '<div class="ms-l3-grid">'
       + dets.slice().reverse().map(function(det) {
           var resultFile = 'result_' + (det.image_path || '').replace(/\.[^.]+$/, '') + '.jpg';
           var sc = det.health_score || 0;
@@ -1558,10 +1740,25 @@ function renderMsL3(d) {
         }).join('')
       + '</div>';
   } else {
-    detInner = '<div class="ms-l3-empty">No detection photos yet.<br>Use Quick Check and assign this sample ID, or upload directly.</div>';
+    detGrid = '<div class="ms-l3-empty">No detection photos yet. Use the upload panel below to run the first detection for this sample.</div>';
   }
 
-  function fileSection(label, files, fileType, typeName) {
+  /* Inline detection upload panel */
+  var now = new Date();
+  var nowDate = now.toISOString().slice(0,10);
+  var nowTime = now.toTimeString().slice(0,5);
+  var detUpload = '<div style="background:var(--surface-2);border-radius:var(--r);padding:16px 20px;margin-bottom:20px">'
+    + '<div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--brown-md);margin-bottom:12px">Upload new detection photo</div>'
+    + '<div style="font-size:12px;color:var(--text-2);margin-bottom:12px">Run YOLO analysis on a specimen photo and archive the result to this sample\'s detection timeline.</div>'
+    + '<div style="display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap">'
+    + '<div><div class="field-label">Photo</div><input type="file" id="l3-det-file" accept="image/*" class="field-input" style="padding:5px 8px;font-size:12px;width:200px" onchange="previewL3DetFile(this)"><div id="l3-det-preview" style="display:none;margin-top:6px"><img id="l3-det-preview-img" style="max-height:72px;border-radius:var(--r);object-fit:contain;display:block"></div></div>'
+    + '<div><div class="field-label">Date</div><input type="date" id="l3-det-date" class="field-input" value="' + nowDate + '" style="width:130px;font-size:12px"></div>'
+    + '<div><div class="field-label">Time</div><input type="time" id="l3-det-time" class="field-input" value="' + nowTime + '" style="width:105px;font-size:12px"></div>'
+    + '<button id="l3-det-btn" onclick="submitL3Detection(\'' + esc(sid) + '\')" class="btn-primary" style="width:auto;padding:9px 20px">Run detection</button>'
+    + '<div class="st-msg" id="l3-det-st" style="align-self:center;flex:1"></div>'
+    + '</div></div>';
+
+  function fileSection(label, desc, files, fileType, typeName) {
     var rows;
     if (files && files.length) {
       rows = files.slice().reverse().map(function(f) {
@@ -1578,7 +1775,7 @@ function renderMsL3(d) {
           + '</div></div>';
       }).join('');
     } else {
-      rows = '<div class="ms-l3-empty">No ' + label.toLowerCase() + ' uploaded yet.</div>';
+      rows = '<div class="ms-l3-empty">No ' + label.toLowerCase() + ' uploaded yet. ' + desc + '</div>';
     }
     return '<div class="ms-l3-section">'
       + '<div class="ms-l3-sec-head">'
@@ -1586,6 +1783,16 @@ function renderMsL3(d) {
       + '<button class="ms-l3-upload-sm" onclick="showUploadFileModal(\'' + esc(sid) + '\',\'' + fileType + '\',\'' + typeName + '\')">+ Upload</button>'
       + '</div>' + rows + '</div>';
   }
+
+  var sensingSection = '<div class="ms-l3-section">'
+    + '<div class="ms-l3-sec-head">'
+    + '<span class="ms-l3-sec-title">Surface &amp; Environment Sensing</span>'
+    + '<button class="ms-l3-upload-sm" onclick="showSensingUploadModal(\'' + esc(sid) + '\')">+ Import CSV</button>'
+    + '</div>'
+    + '<div class="ms-l3-empty" style="line-height:1.7">Surface humidity and environment humidity readings collected by ESP32 sensors. '
+    + 'Sensing data is matched by sample ID and date to enrich detection health scores with delta-humidity context. '
+    + 'Import historical log files (log_surface.csv or log_env.csv) directly from this panel.</div>'
+    + '</div>';
 
   document.getElementById('ms-l3-content').innerHTML =
     '<div class="ms-l3-head">' + headThumb
@@ -1596,10 +1803,17 @@ function renderMsL3(d) {
     + '</div></div>'
     + '<div class="ms-l3-section">'
     + '<div class="ms-l3-sec-head"><span class="ms-l3-sec-title">Detection photos (' + dets.length + ')</span></div>'
-    + detInner + '</div>'
-    + fileSection('Humidity Maps', d.humidity_maps, 'humidity_map', 'Humidity Map')
-    + fileSection('CloudCompare Results', d.cloudcompare, 'cloudcompare', 'CloudCompare Result')
-    + fileSection('Scan Models (GLB / OBJ)', d.scan_models, 'scan_model', 'Scan Model');
+    + detUpload + detGrid + '</div>'
+    + fileSection('Humidity Maps',
+        'Upload rendered colour maps exported from Houdini or similar tools — showing spatial moisture distribution across the specimen surface.',
+        d.humidity_maps, 'humidity_map', 'Humidity Map')
+    + fileSection('CloudCompare Results',
+        'Upload screenshots or exports from CloudCompare showing volumetric change over time between scan sessions.',
+        d.cloudcompare, 'cloudcompare', 'CloudCompare Result')
+    + fileSection('Scan Models (GLB / OBJ)',
+        'Upload 3D scan models in GLB or OBJ format for in-browser viewing. Scans should be taken every 5 days to track physical deformation.',
+        d.scan_models, 'scan_model', 'Scan Model')
+    + sensingSection;
 }
 
 function backToMsL1() {
@@ -1625,33 +1839,68 @@ function msDate(ts) {
   } catch(e) { return ts; }
 }
 
+/* ── File preview helpers ───────────────────────────────────── */
+function previewCoverPhoto(input) {
+  var wrap = document.getElementById('cs-cover-preview');
+  var img  = document.getElementById('cs-cover-img');
+  if (!wrap || !img) return;
+  if (input.files && input.files[0]) {
+    var reader = new FileReader();
+    reader.onload = function(e) { img.src = e.target.result; wrap.style.display = 'block'; };
+    reader.readAsDataURL(input.files[0]);
+  } else {
+    wrap.style.display = 'none';
+  }
+}
+function previewL3DetFile(input) {
+  var wrap = document.getElementById('l3-det-preview');
+  var img  = document.getElementById('l3-det-preview-img');
+  if (!wrap || !img) return;
+  if (input.files && input.files[0]) {
+    var reader = new FileReader();
+    reader.onload = function(e) { img.src = e.target.result; wrap.style.display = 'block'; };
+    reader.readAsDataURL(input.files[0]);
+  } else {
+    wrap.style.display = 'none';
+  }
+}
+
 /* ── Create sample modal ────────────────────────────────────── */
 function showCreateSampleModal() {
   document.getElementById('cs-id').value   = '';
   document.getElementById('cs-name').value = '';
   document.getElementById('cs-err').textContent = '';
+  var cover = document.getElementById('cs-cover');
+  if (cover) cover.value = '';
+  var prev = document.getElementById('cs-cover-preview');
+  if (prev) prev.style.display = 'none';
   document.getElementById('create-sample-modal').classList.add('open');
 }
 function closeCreateSampleModal() {
   document.getElementById('create-sample-modal').classList.remove('open');
 }
 async function submitCreateSample() {
-  var sid  = document.getElementById('cs-id').value.trim();
-  var name = document.getElementById('cs-name').value.trim();
-  var err  = document.getElementById('cs-err');
+  var sid    = document.getElementById('cs-id').value.trim();
+  var name   = document.getElementById('cs-name').value.trim();
+  var coverEl = document.getElementById('cs-cover');
+  var err    = document.getElementById('cs-err');
+  var btn    = document.getElementById('cs-submit-btn');
   err.textContent = '';
   if (!sid) { err.textContent = 'Sample ID is required.'; return; }
   if (!/^[a-zA-Z0-9\-]+$/.test(sid)) { err.textContent = 'Letters, numbers, and hyphens only.'; return; }
+  btn.disabled = true; btn.textContent = 'Creating…';
   try {
-    var r = await authFetch(API + '/samples', {
-      method: 'POST',
-      body: JSON.stringify({sample_id: sid, name: name || sid})
-    });
+    var fd = new FormData();
+    fd.append('sample_id', sid);
+    fd.append('name', name || sid);
+    if (coverEl && coverEl.files[0]) fd.append('cover_image', coverEl.files[0]);
+    var r = await authFetch(API + '/samples', {method: 'POST', body: fd});
     var d = await r.json();
     if (!d.success) { err.textContent = d.error || 'Failed to create sample.'; return; }
     closeCreateSampleModal();
     loadMySamples();
   } catch(e) { err.textContent = 'Cannot reach server.'; }
+  finally { btn.disabled = false; btn.textContent = 'Create sample'; }
 }
 
 /* ── Upload file modal ──────────────────────────────────────── */
@@ -1694,6 +1943,68 @@ async function submitUploadFile() {
     }
   } catch(e) { err.textContent = 'Cannot reach server.'; }
   finally { btn.textContent = 'Upload'; btn.disabled = false; }
+}
+
+/* ── L3 — upload detection photo for a specific sample ───────── */
+async function submitL3Detection(sampleId) {
+  var fileEl = document.getElementById('l3-det-file');
+  var st     = document.getElementById('l3-det-st');
+  var btn    = document.getElementById('l3-det-btn');
+  st.textContent = ''; st.className = 'st-msg';
+  if (!fileEl || !fileEl.files[0]) {
+    st.textContent = 'Please select a photo first.'; st.className = 'st-msg err'; return;
+  }
+  var date = document.getElementById('l3-det-date').value;
+  var time = document.getElementById('l3-det-time').value;
+  var fd   = new FormData();
+  fd.append('image',     fileEl.files[0]);
+  fd.append('sample_id', sampleId);
+  if (date && time) fd.append('timestamp', date + ' ' + time + ':00');
+  btn.disabled = true; btn.textContent = 'Detecting…';
+  try {
+    var r = await authFetch(API + '/detect', {method: 'POST', body: fd});
+    var d = await r.json();
+    if (!d.success) throw new Error(d.error || 'Detection failed');
+    st.textContent = 'Done · score ' + d.health_score + '/100';
+    st.className   = 'st-msg ok';
+    fileEl.value   = '';
+    setTimeout(function() { openMsL3(); }, 1400);
+  } catch(e) {
+    st.textContent = 'Error: ' + e.message; st.className = 'st-msg err';
+  } finally { btn.disabled = false; btn.textContent = 'Run detection'; }
+}
+
+/* ── Sensing CSV upload modal ────────────────────────────────── */
+function showSensingUploadModal(sampleId) {
+  document.getElementById('sv-sample-id').value = sampleId;
+  document.getElementById('sv-file').value  = '';
+  document.getElementById('sv-err').textContent = '';
+  document.getElementById('sensing-upload-modal').classList.add('open');
+}
+function closeSensingUploadModal() {
+  document.getElementById('sensing-upload-modal').classList.remove('open');
+}
+async function submitSensingUpload() {
+  var sampleId = document.getElementById('sv-sample-id').value;
+  var csvType  = document.getElementById('sv-type').value;
+  var fileEl   = document.getElementById('sv-file');
+  var err      = document.getElementById('sv-err');
+  var btn      = document.getElementById('sv-submit');
+  err.textContent = '';
+  if (!fileEl.files[0]) { err.textContent = 'Please select a CSV file.'; return; }
+  var fd = new FormData();
+  fd.append('file',     fileEl.files[0]);
+  fd.append('csv_type', csvType);
+  btn.disabled = true; btn.textContent = 'Importing…';
+  try {
+    var r = await authFetch(API + '/upload-csv', {method: 'POST', body: fd});
+    var d = await r.json();
+    if (!d.success) { err.textContent = d.error || 'Import failed.'; return; }
+    closeSensingUploadModal();
+    /* Reload L3 to show updated sensing context */
+    if (document.getElementById('ms-l3').style.display !== 'none') openMsL3();
+  } catch(e) { err.textContent = 'Cannot reach server.'; }
+  finally { btn.disabled = false; btn.textContent = 'Import data'; }
 }
 
 /* ══════════════════════════════════════════════════════════════
