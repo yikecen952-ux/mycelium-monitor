@@ -510,27 +510,47 @@ def detect():
 
         result_filename = f"result_{os.path.splitext(filename)[0]}.jpg"
         result_path     = os.path.join(UPLOAD_FOLDER, result_filename)
-        # Custom rendering: thin lines, class label only (no confidence score)
+        # Custom rendering: thin lines, small text, class label only (no confidence score)
         import cv2 as _cv2
-        _cv2.imwrite(result_path, result.plot(conf=False, line_width=2))
-
-        img_h, img_w = result.orig_shape[:2]
-        img_area = img_w * img_h if img_w * img_h > 0 else 1
+        _cv2.imwrite(result_path, result.plot(conf=False, line_width=2, font_size=4))
 
         detections = []
-        if result.boxes is not None:
+        state_pixel_counts = {}
+
+        if result.masks is not None and result.boxes is not None:
+            # Segmentation masks available — use real pixel area
+            for box, mask in zip(result.boxes, result.masks.data):
+                try:
+                    class_id   = int(box.cls[0])
+                    class_name = model.names[class_id]
+                    confidence = round(float(box.conf[0]) * 100, 1)
+                    x1, y1, x2, y2 = [round(float(v), 1) for v in box.xyxy[0]]
+                    mask_pixels = float(mask.sum())
+                    state_pixel_counts[class_name] = state_pixel_counts.get(class_name, 0) + mask_pixels
+                    detections.append({
+                        "class_id":   class_id,
+                        "class_name": class_name,
+                        "confidence": confidence,
+                        "bbox": {"x1":x1,"y1":y1,"x2":x2,"y2":y2,
+                                 "width":round(x2-x1,1),"height":round(y2-y1,1)}
+                    })
+                except Exception as box_err:
+                    print(f"Box parsing error: {box_err}")
+                    continue
+        elif result.boxes is not None:
+            # Fallback: no masks, use bbox area
             for box in result.boxes:
                 try:
                     class_id   = int(box.cls[0])
                     class_name = model.names[class_id]
                     confidence = round(float(box.conf[0]) * 100, 1)
                     x1, y1, x2, y2 = [round(float(v), 1) for v in box.xyxy[0]]
-                    area_pct = round((x2-x1)*(y2-y1) / img_area * 100, 1)
+                    bbox_area = (x2 - x1) * (y2 - y1)
+                    state_pixel_counts[class_name] = state_pixel_counts.get(class_name, 0) + bbox_area
                     detections.append({
                         "class_id":   class_id,
                         "class_name": class_name,
                         "confidence": confidence,
-                        "area_pct":   area_pct,
                         "bbox": {"x1":x1,"y1":y1,"x2":x2,"y2":y2,
                                  "width":round(x2-x1,1),"height":round(y2-y1,1)}
                     })
@@ -538,10 +558,8 @@ def detect():
                     print(f"Box parsing error: {box_err}")
                     continue
 
-        state_areas = {}
-        for d in detections:
-            n = d["class_name"]
-            state_areas[n] = round(state_areas.get(n, 0) + d["area_pct"], 1)
+        total_pixels = sum(state_pixel_counts.values())
+        state_areas = {k: round(v / total_pixels * 100, 1) for k, v in state_pixel_counts.items()} if total_pixels > 0 else {}
 
         # Find sensing delta for this sample+date
         delta, surf_hum, env_hum, temp_c = find_sensing_delta(user_id, sample_id, timestamp)
@@ -759,6 +777,14 @@ def history():
 
 
 # ── Samples (user-scoped) ─────────────────────────────────────────────────────
+def _try_delete_file(path):
+    try:
+        if os.path.exists(path):
+            os.remove(path)
+    except Exception as exc:
+        print(f"File delete warning: {exc}", flush=True)
+
+
 @app.route("/samples", methods=["GET", "POST"])
 @require_auth
 def samples():
@@ -864,6 +890,52 @@ def sample_detail(sample_id):
         "cloudcompare":  files_by_type["cloudcompare"],
         "scan_models":   files_by_type["scan_model"],
     })
+
+
+# ── Sample delete ─────────────────────────────────────────────────────────────
+@app.route("/samples/<sample_id>/delete", methods=["DELETE"])
+@require_auth
+def delete_sample(sample_id):
+    user    = get_current_user()
+    user_id = user["user_id"]
+    conn    = get_db()
+
+    row = conn.execute(
+        "SELECT cover_image FROM samples WHERE sample_id = ? AND user_id = ?",
+        (sample_id, user_id)
+    ).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"error": "Sample not found or not yours"}), 404
+
+    dets   = conn.execute(
+        "SELECT image_path FROM detections WHERE sample_id = ? AND user_id = ?",
+        (sample_id, user_id)
+    ).fetchall()
+    sfiles = conn.execute(
+        "SELECT file_path FROM sample_files WHERE sample_id = ? AND user_id = ?",
+        (sample_id, user_id)
+    ).fetchall()
+
+    conn.execute("DELETE FROM detections   WHERE sample_id = ? AND user_id = ?", (sample_id, user_id))
+    conn.execute("DELETE FROM sample_files WHERE sample_id = ? AND user_id = ?", (sample_id, user_id))
+    conn.execute("DELETE FROM samples      WHERE sample_id = ? AND user_id = ?", (sample_id, user_id))
+    conn.commit()
+    conn.close()
+
+    if row["cover_image"]:
+        _try_delete_file(os.path.join(UPLOAD_FOLDER, row["cover_image"]))
+    for det in dets:
+        if det["image_path"]:
+            _try_delete_file(os.path.join(UPLOAD_FOLDER, det["image_path"]))
+            stem = os.path.splitext(det["image_path"])[0]
+            _try_delete_file(os.path.join(UPLOAD_FOLDER, f"result_{stem}.jpg"))
+    for sf in sfiles:
+        if sf["file_path"]:
+            _try_delete_file(os.path.join(UPLOAD_FOLDER, sf["file_path"]))
+
+    print(f"🗑 Deleted sample {sample_id} by user {user_id}", flush=True)
+    return jsonify({"success": True})
 
 
 # ── Sample files — upload ─────────────────────────────────────────────────────
