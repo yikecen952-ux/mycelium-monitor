@@ -1048,8 +1048,12 @@ section { scroll-margin-top: 106px; }
             <input type="text" id="ct-name" class="field-input" placeholder="Anonymous">
           </div>
           <div style="margin-bottom:14px">
-            <div class="field-label">Location <span style="color:var(--text-3)">(optional)</span></div>
-            <input type="text" id="ct-loc" class="field-input" placeholder="e.g. London, UK">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <div class="field-label" style="margin-bottom:0">Location <span style="color:var(--h-danger)">*</span></div>
+              <button type="button" id="ct-geo-btn" onclick="geoLocate()" style="font-size:11px;padding:3px 10px;background:var(--surface-2);border:1px solid var(--brown-lt);border-radius:var(--r);cursor:pointer;color:var(--text-2);font-family:inherit">Detect my location</button>
+            </div>
+            <input type="text" id="ct-loc" class="field-input" placeholder="e.g. London, UK" oninput="updateSubmitState()">
+            <div style="font-size:11px;color:var(--text-3);margin-top:4px">Required — used to place your contribution on the map.</div>
           </div>
           <div style="margin-bottom:14px">
             <div class="field-label">Mycelium type <span style="color:var(--text-3)">(optional)</span></div>
@@ -2070,6 +2074,7 @@ var _ctImg     = null;
 var _ctPolys      = [];
 var _ctCurrentPts = [];
 var _ctMousePos   = null;
+var _ctFile       = null;
 
 /* ── L1 map ─────────────────────────────────────────────────── */
 function initCtMap() {
@@ -2103,6 +2108,7 @@ async function loadCtMarkers() {
 function showCtL2() {
   document.getElementById('ct-l1').style.display = 'none';
   document.getElementById('ct-l2').style.display = 'block';
+  geoLocate();
 }
 function backToCtL1() {
   document.getElementById('ct-l2').style.display = 'none';
@@ -2129,6 +2135,7 @@ function backToCtL1() {
 
 function initCtCanvas(file) {
   _ctPolys = []; _ctCurrentPts = []; _ctMousePos = null;
+  _ctFile = file;
   var img = new Image();
   img.onload = function() {
     _ctImg = img;
@@ -2137,7 +2144,7 @@ function initCtCanvas(file) {
     cv.height = img.naturalHeight;
     document.getElementById('ct-drop-wrap').style.display   = 'none';
     document.getElementById('ct-canvas-wrap').style.display = 'block';
-    document.getElementById('ct-submit').disabled = false;
+    updateSubmitState();
     renderCtCanvas();
     updateCtAnn();
   };
@@ -2312,12 +2319,53 @@ function updateCtAnn() {
   }).join('');
 }
 
+/* ── Submit state ───────────────────────────────────────────── */
+function updateSubmitState() {
+  var hasFile = !!_ctFile;
+  var hasLoc  = !!(document.getElementById('ct-loc').value.trim());
+  document.getElementById('ct-submit').disabled = !(hasFile && hasLoc);
+}
+
+function geoLocate() {
+  var el  = document.getElementById('ct-loc');
+  var btn = document.getElementById('ct-geo-btn');
+  if (!navigator.geolocation) {
+    if (btn) { btn.textContent = 'Location unavailable'; btn.disabled = true; }
+    return;
+  }
+  if (btn) { btn.disabled = true; btn.textContent = 'Detecting…'; }
+  navigator.geolocation.getCurrentPosition(
+    function(pos) {
+      fetch(
+        'https://nominatim.openstreetmap.org/reverse?format=json&lat=' +
+        pos.coords.latitude + '&lon=' + pos.coords.longitude,
+        {headers: {'Accept-Language': 'en'}}
+      )
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        var addr    = d.address || {};
+        var city    = addr.city || addr.town || addr.village || addr.county || '';
+        var country = addr.country || '';
+        var loc     = [city, country].filter(Boolean).join(', ');
+        if (loc && el) { el.value = loc; updateSubmitState(); }
+        if (btn) { btn.disabled = false; btn.textContent = 'Update location'; }
+      })
+      .catch(function() {
+        if (btn) { btn.disabled = false; btn.textContent = 'Detect my location'; }
+      });
+    },
+    function() {
+      if (btn) { btn.disabled = false; btn.textContent = 'Detect my location'; }
+    },
+    {timeout: 8000}
+  );
+}
+
 /* ── Submit ─────────────────────────────────────────────────── */
 async function submitContribution() {
-  var fi  = document.getElementById('ct-fi');
   var btn = document.getElementById('ct-submit');
   var st  = document.getElementById('ct-st');
-  if (!fi.files[0]) return;
+  if (!_ctFile) return;
   btn.disabled = true; btn.textContent = 'Submitting…';
   st.textContent = ''; st.className = 'st-msg';
 
@@ -2332,7 +2380,7 @@ async function submitContribution() {
   });
 
   var fd = new FormData();
-  fd.append('image',         fi.files[0]);
+  fd.append('image',         _ctFile);
   fd.append('contributor',   document.getElementById('ct-name').value.trim() || 'anonymous');
   fd.append('location',      document.getElementById('ct-loc').value.trim());
   fd.append('mycelium_type', document.getElementById('ct-type').value);
@@ -2357,7 +2405,7 @@ async function submitContribution() {
 }
 
 function resetContribution() {
-  _ctImg = null; _ctPolys = []; _ctCurrentPts = []; _ctMousePos = null;
+  _ctImg = null; _ctPolys = []; _ctCurrentPts = []; _ctMousePos = null; _ctFile = null;
   document.getElementById('ct-fi').value = '';
   document.getElementById('ct-canvas-wrap').style.display = 'none';
   document.getElementById('ct-drop-wrap').style.display   = 'block';
