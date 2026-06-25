@@ -189,6 +189,7 @@ def init_db():
     # Safe: ALTER TABLE ADD COLUMN is ignored if column already exists via try/except
     migrations = [
         ("detections",       "user_id          INTEGER"),
+        ("detections",       "state_areas      TEXT"),
         ("surface_readings", "user_id          INTEGER"),
         ("env_readings",     "user_id          INTEGER"),
         ("contributions",    "user_id          INTEGER"),
@@ -681,10 +682,11 @@ def detect():
             INSERT INTO detections
                 (user_id, sample_id, model_type, timestamp, image_path,
                  yolo_state, health_score, temp_c, env_humidity, surface_humidity,
-                 delta_humidity, notes)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                 delta_humidity, notes, state_areas)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (user_id, sample_id, model_type, timestamp, filename,
-              yolo_state, health_score, temp_c, env_hum, surf_hum, delta, notes))
+              yolo_state, health_score, temp_c, env_hum, surf_hum, delta, notes,
+              json.dumps(state_areas) if state_areas else None))
         conn.commit()
 
         realtime_delta = try_compute_delta_realtime(sample_id, user_id, conn)
@@ -965,7 +967,7 @@ def sample_detail(sample_id):
 
     det_rows = conn.execute("""
         SELECT id, timestamp, yolo_state, health_score, image_path, notes,
-               surface_humidity, env_humidity, delta_humidity, temp_c
+               surface_humidity, env_humidity, delta_humidity, temp_c, state_areas
         FROM detections
         WHERE user_id=? AND sample_id=?
         ORDER BY timestamp ASC

@@ -440,9 +440,9 @@ section { scroll-margin-top: 106px; }
 /* ── Archive page ───────────────────────────────────────── */
 .arc-id-bar {
   display: flex; align-items: flex-start; gap: 24px;
-  background: var(--surface-2); border-radius: var(--r-lg);
-  padding: 28px 32px; margin-bottom: 48px;
-  border: 1px solid var(--brown-lt);
+  background: var(--surface); border-radius: var(--r-lg);
+  padding: 28px 32px; margin-bottom: 24px;
+  box-shadow: 0 2px 16px rgba(50,30,10,.07), 0 1px 4px rgba(50,30,10,.04);
 }
 .arc-id-thumb {
   width: 100px; height: 100px; border-radius: var(--r);
@@ -477,7 +477,12 @@ section { scroll-margin-top: 106px; }
   background: var(--surface); border: 1px solid var(--brown-lt);
   border-radius: var(--r);
 }
-.arc-section { margin-bottom: 52px; }
+.arc-section {
+  margin-bottom: 20px;
+  background: var(--surface); border-radius: var(--r-lg);
+  padding: 28px 32px;
+  box-shadow: 0 2px 16px rgba(50,30,10,.07), 0 1px 4px rgba(50,30,10,.04);
+}
 .arc-sec-head {
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 20px; padding-bottom: 12px;
@@ -1322,7 +1327,7 @@ var STATE_BADGE = {
   contaminated:'b-contam', contamination_risk:'b-contam',
   exposed_substrate:'b-substrate'
 };
-function stateLabel(s) { return STATE_LABELS[s] || (s || 'Unknown'); }
+function stateLabel(s) { return STATE_LABELS[s] || 'Unknown'; }
 function badge(s) {
   return '<span class="badge ' + (STATE_BADGE[s] || 'b-unknown') + '">' + stateLabel(s) + '</span>';
 }
@@ -1525,7 +1530,7 @@ function renderMsL1(samples) {
   if (!list) return;
   list.innerHTML = samples.map(function(s) {
     var thumb = s.cover_image
-      ? '<img class="ms-card-thumb" src="' + API + '/image/' + escH(s.cover_image) + '" alt="" onerror="this.outerHTML=\'<div class=\\\"ms-card-ph\\\">○</div>\'">'
+      ? '<img class="ms-card-thumb" src="' + API + '/image/' + escH(s.cover_image) + '" alt="" onerror="imgErr(this,\'ms-card-ph\')">'
       : '<div class="ms-card-ph">○</div>';
     var statusPart = s.latest_state
       ? badge(s.latest_state) + '<span style="margin-left:8px;font-size:11px;color:var(--text-3)">' + msDate(s.latest_ts) + '</span>'
@@ -1634,7 +1639,7 @@ function renderMsArchive(d) {
 
   /* ── Identity bar ── */
   var idThumb = s.cover_image
-    ? '<img class="arc-id-thumb" src="' + API + '/image/' + escH(s.cover_image) + '" alt="" onerror="this.outerHTML=\'<div class=\\\"arc-id-ph\\\">○</div>\'">'
+    ? '<img class="arc-id-thumb" src="' + API + '/image/' + escH(s.cover_image) + '" alt="" onerror="imgErr(this,\'arc-id-ph\')">'
     : '<div class="arc-id-ph">○</div>';
 
   var trendDetsChron = dets.slice().reverse(); /* chronological for chart */
@@ -1818,6 +1823,29 @@ function renderArcMetrics(det) {
     + '<div style="font-size:44px;font-weight:200;line-height:1;color:' + scColor + '">' + sc
     + '<span style="font-size:15px;color:var(--text-3);margin-left:3px">/ 100</span></div>'
     + '<div style="margin-top:10px">' + badge(det.yolo_state) + '</div>';
+
+  /* Area breakdown (state_areas stored as JSON string by backend) */
+  var areas = null;
+  if (det.state_areas) {
+    try { areas = (typeof det.state_areas === 'string') ? JSON.parse(det.state_areas) : det.state_areas; } catch(e) {}
+  }
+  var AREA_LABELS = {
+    'healthy_mycelium': 'Healthy', 'dry_aged_mycelium': 'Dry / aged',
+    'contamination_risk': 'Contamination risk', 'exposed_substrate': 'Exposed substrate'
+  };
+  var areaOrder = ['healthy_mycelium','dry_aged_mycelium','contamination_risk','exposed_substrate'];
+  if (areas && areaOrder.some(function(k){ return areas[k] != null; })) {
+    html += '<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--brown-lt)">';
+    html += '<div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--brown-md);margin-bottom:8px">Detections found</div>';
+    areaOrder.forEach(function(cls) {
+      if (areas[cls] != null) {
+        html += '<div class="det-row"><span class="det-key">' + AREA_LABELS[cls] + '</span><span>' + areas[cls] + '%</span></div>';
+      }
+    });
+    html += '</div>';
+  }
+
+  /* Sensing data */
   if (det.surface_humidity != null || det.env_humidity != null || det.delta_humidity != null) {
     html += '<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--brown-lt)">';
     html += '<div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--brown-md);margin-bottom:8px">Sensing</div>';
@@ -1854,7 +1882,13 @@ async function deleteSample(sampleId, detCount) {
 }
 /* ── String helpers ─────────────────────────────────────────── */
 function escH(s) {
-  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function imgErr(el, cls) {
+  var ph = document.createElement('div');
+  ph.className = cls;
+  ph.textContent = '○';
+  if (el.parentNode) el.parentNode.replaceChild(ph, el);
 }
 function esc(s) { return String(s || '').replace(/'/g,"\\'"); }
 function msDate(ts) {
