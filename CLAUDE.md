@@ -14,7 +14,7 @@ A web-based mycelium health monitoring system for an MArch thesis (RC7, Bartlett
 
 - **Backend:** Flask (single file, `app.py`), SQLite, JWT auth (PyJWT), bcrypt
 - **Frontend:** single-page `dashboard_v3.html` (vanilla JS, Chart.js, Leaflet) + `admin.html`
-- **ML:** Ultralytics YOLO, model file `best.pt` (segment model, detect-mode trained)
+- **ML:** Ultralytics YOLO, model file `best.pt` — **segmentation model** (`model.task == "segment"`), trained entirely on polygon annotations
 - **Sensors:** `sensor_surface.py` (ESP32 COM7, surface humidity), `sensor_env.py` (ESP32 COM4, environment humidity)
 - **Deploy:** Railway, auto-deploys from GitHub `master` branch on push. Built via `Dockerfile` (python:3.11-slim).
 
@@ -66,6 +66,12 @@ Never hardcode `mycelium.db` or `uploads/` back to the project root — that wou
 ### Roboflow upload (Contribute feature)
 Images are POSTed to Roboflow as **base64 in the raw request body** with `Content-Type: application/x-www-form-urlencoded`. Sending base64 inside a JSON field returns 500. Workspace `myceliummonitor`, project `mycelium-detection`. API key is in `app.py` (do not print it in responses).
 
+### Image upload pipeline (`/detect` and `/contribute`)
+Both routes decode uploads through `load_normalized_image()` (shared helper in `app.py`) instead of `file.save()`-ing the raw upload: PIL decode (HEIC/HEIF via `pillow-heif`, registered at startup) → EXIF rotation fix → convert to RGB → downscale so the longest side ≤ `MAX_UPLOAD_DIM` (1280px) → always saved as `.jpg`. This exists because phone-resolution originals fed straight into YOLO were OOM-killing the Railway dyno, and HEIC isn't decodable by OpenCV. Don't bypass it by calling `file.save()` directly again. Contribute's annotation points are normalized 0–1 (canvas-relative), so resizing here is safe and doesn't desync them.
+
+### Detection result rendering (`/detect`)
+The result image is **not** drawn with YOLO's default `result.plot()` — it's hand-drawn in `render_detection_image()`: translucent class-colored mask polygon (from `result.masks.xy`, falls back to the bbox if a detection has no mask) + solid outline, no text on the photo, with a small legend strip (color swatch + class name) appended below the image. Colors live in `DETECTION_COLORS` in `app.py`: healthy=green, dry_aged=yellow, contamination=dark brownish-red, exposed_substrate=gray (deliberately not the UI's brown-tan substrate badge color — needs to stand out against the brown wood/mycelium background).
+
 ### Admin
 - Admin account: username `Kecen Yi` (created/refreshed on startup, `is_admin=1`).
 - `/admin/images`, `/admin/users`, `/admin/detections`, `/admin/download-all` (ZIP) require an admin JWT.
@@ -81,7 +87,7 @@ git push        # Railway auto-deploys from master
 ```
 
 ### Update the model
-Replace `best.pt`, then commit and push. Retraining is done in Google Colab (T4 GPU) from a Roboflow YOLOv8-format export — train detect mode (`yolo11n.pt`), not seg, because the dataset mixes bbox and polygon annotations.
+Replace `best.pt`, then commit and push. Retraining is done in Google Colab (T4 GPU) from a Roboflow YOLOv8-format export — train **seg mode** (e.g. `yolo11n-seg.pt`). The dataset is fully re-annotated with polygons (no bbox-only labels remain), so every detection should yield a real mask contour, not a degenerate rectangle.
 
 ### Run sensors locally (optional)
 Set `SEND_TO_DB = True` and paste the auth token into `AUTH_TOKEN` in the sensor script; otherwise it logs to CSV only.
