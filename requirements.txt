@@ -4,3 +4,4 @@ ultralytics
 bcrypt
 PyJWT
 requests
+pillow-heif

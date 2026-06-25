@@ -13,6 +13,13 @@ from functools import wraps
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from ultralytics import YOLO
+from PIL import Image, ImageOps, ImageDraw, ImageFont
+
+try:
+    from pillow_heif import register_heif_opener
+    register_heif_opener()   # let PIL.Image.open() decode HEIC/HEIF uploads
+except ImportError:
+    pass
 
 # Force unbuffered output so Railway logs show print() immediately
 sys.stdout.reconfigure(line_buffering=True)
@@ -482,6 +489,98 @@ def status():
     return jsonify({"status": "ok", "message": "SYMBIO-FRAME backend running 🍄"})
 
 
+# ── Shared image upload preprocessing (used by /detect and /contribute) ───────
+MAX_UPLOAD_DIM = 1280   # longest side, px — keeps memory bounded and stays detailed enough for annotation/training
+
+def load_normalized_image(file_storage, max_dim=MAX_UPLOAD_DIM):
+    """Decode an uploaded image file (jpg/png/webp/heic/... via PIL+pillow-heif),
+    correct EXIF rotation, convert to RGB, and downscale so the longest side
+    does not exceed max_dim. Returns a PIL.Image in RGB mode.
+    Raises ValueError if the file cannot be decoded as an image."""
+    try:
+        img = Image.open(file_storage.stream)
+        img.load()
+    except Exception as e:
+        raise ValueError(f"Unsupported or corrupted image file: {e}")
+
+    try:
+        img = ImageOps.exif_transpose(img)   # match the orientation browsers display (and annotations are drawn against)
+    except Exception:
+        pass
+
+    if img.mode != "RGB":
+        img = img.convert("RGB")
+
+    w, h = img.size
+    longest = max(w, h)
+    if longest > max_dim:
+        scale = max_dim / longest
+        img = img.resize((max(1, round(w * scale)), max(1, round(h * scale))), Image.LANCZOS)
+
+    return img
+
+
+# ── Detection result rendering (custom overlay, no YOLO default plot) ─────────
+DETECTION_COLORS = {
+    "healthy_mycelium":   (40, 160, 70),    # green
+    "dry_aged_mycelium":  (240, 195, 25),   # yellow
+    "contamination_risk": (122, 40, 28),    # dark brownish-red
+    "exposed_substrate":  (140, 140, 140),  # gray
+}
+LEGEND_ORDER = ["healthy_mycelium", "dry_aged_mycelium", "contamination_risk", "exposed_substrate"]
+LEGEND_LABELS = {
+    "healthy_mycelium":   "Healthy",
+    "dry_aged_mycelium":  "Dry / aged",
+    "contamination_risk": "Contamination risk",
+    "exposed_substrate":  "Exposed substrate",
+}
+
+def render_detection_image(base_img, result):
+    """Draw translucent class-colored mask overlays (boxes as fallback when a
+    detection has no mask) on base_img, then append a legend strip below.
+    No text is drawn on the photo itself — only the legend names it."""
+    base    = base_img.convert("RGB")
+    overlay = Image.new("RGBA", base.size, (0, 0, 0, 0))
+    draw    = ImageDraw.Draw(overlay)
+
+    mask_polys = result.masks.xy if result.masks is not None else None
+    if result.boxes is not None:
+        for i, box in enumerate(result.boxes):
+            try:
+                class_name = model.names[int(box.cls[0])]
+            except Exception:
+                continue
+            color = DETECTION_COLORS.get(class_name, (150, 150, 150))
+            poly  = mask_polys[i] if mask_polys is not None and i < len(mask_polys) else None
+            if poly is not None and len(poly) >= 3:
+                draw.polygon([tuple(p) for p in poly], fill=color + (90,), outline=color + (255,), width=3)
+            else:
+                x1, y1, x2, y2 = [float(v) for v in box.xyxy[0]]
+                draw.rectangle([x1, y1, x2, y2], fill=color + (90,), outline=color + (255,), width=3)
+
+    composited = Image.alpha_composite(base.convert("RGBA"), overlay).convert("RGB")
+    return _add_legend_strip(composited)
+
+
+def _add_legend_strip(img):
+    legend_h = 40
+    w, h     = img.size
+    canvas   = Image.new("RGB", (w, h + legend_h), (250, 248, 244))
+    canvas.paste(img, (0, 0))
+    draw   = ImageDraw.Draw(canvas)
+    font   = ImageFont.load_default(size=13)
+    swatch = 12
+    x = 16
+    y = h + legend_h // 2
+    for cls in LEGEND_ORDER:
+        color = DETECTION_COLORS[cls]
+        draw.rectangle([x, y - swatch // 2, x + swatch, y + swatch // 2], fill=color)
+        label = LEGEND_LABELS[cls]
+        draw.text((x + swatch + 6, y), label, fill=(60, 50, 40), font=font, anchor="lm")
+        x += swatch + 6 + draw.textlength(label, font=font) + 26
+    return canvas
+
+
 # ── Detect ────────────────────────────────────────────────────────────────────
 @app.route("/detect", methods=["POST"])
 @require_auth
@@ -498,21 +597,24 @@ def detect():
     timestamp  = request.form.get("timestamp") or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     model_type = "main" if sample_id.startswith("WOOD") else "pilot"
 
-    ext       = os.path.splitext(file.filename)[1].lower() or ".jpg"
-    filename  = f"{uuid.uuid4().hex}{ext}"
+    try:
+        img = load_normalized_image(file)
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+
+    filename  = f"{uuid.uuid4().hex}.jpg"
     save_path = os.path.join(UPLOAD_FOLDER, filename)
 
     try:
-        file.save(save_path)
+        img.save(save_path, "JPEG", quality=90)
 
         results = model(save_path, conf=0.1)
         result  = results[0]
 
         result_filename = f"result_{os.path.splitext(filename)[0]}.jpg"
         result_path     = os.path.join(UPLOAD_FOLDER, result_filename)
-        # Custom rendering: thin lines, small text, class label only (no confidence score)
-        import cv2 as _cv2
-        _cv2.imwrite(result_path, result.plot(conf=False, line_width=2, font_size=4))
+        render_detection_image(img, result).save(result_path, "JPEG", quality=90)
+        img.close()
 
         detections = []
         state_pixel_counts = {}
@@ -1163,10 +1265,15 @@ def contribute():
     except Exception:
         annotations = []
 
-    ext       = os.path.splitext(file.filename)[1].lower() or ".jpg"
-    filename  = f"contrib_{uuid.uuid4().hex}{ext}"
+    try:
+        img = load_normalized_image(file)
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+
+    filename  = f"contrib_{uuid.uuid4().hex}.jpg"
     save_path = os.path.join(UPLOAD_FOLDER, filename)
-    file.save(save_path)
+    img.save(save_path, "JPEG", quality=90)
+    img.close()
 
     print(f"📥 Contribute received: {filename}, {len(annotations)} annotations", flush=True)
     roboflow_id    = None
