@@ -524,8 +524,8 @@ def load_normalized_image(file_storage, max_dim=MAX_UPLOAD_DIM):
 DETECTION_COLORS = {
     "healthy_mycelium":   (40, 160, 70),    # green
     "dry_aged_mycelium":  (240, 195, 25),   # yellow
-    "contamination_risk": (122, 40, 28),    # dark brownish-red
-    "exposed_substrate":  (140, 140, 140),  # gray
+    "contamination_risk": (128, 0, 128),    # purple
+    "exposed_substrate":  (220, 50, 50),   # red
 }
 LEGEND_ORDER = ["healthy_mycelium", "dry_aged_mycelium", "contamination_risk", "exposed_substrate"]
 LEGEND_LABELS = {
