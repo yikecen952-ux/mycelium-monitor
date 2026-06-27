@@ -1310,6 +1310,46 @@ def contribute():
     })
 
 
+# ── City coordinate fallback for contributions without stored lat/lng ──────────
+# Used by /contributions/stats when a location group has NULL lat/lng.
+# Keys are lowercase substrings to match against the location text.
+CITY_FALLBACK = {
+    # China
+    "beijing": (39.9042, 116.4074),   "北京": (39.9042, 116.4074),
+    "shanghai": (31.2304, 121.4737),  "上海": (31.2304, 121.4737),
+    "chengdu": (30.5728, 104.0668),   "成都": (30.5728, 104.0668),
+    "guangzhou": (23.1291, 113.2644), "广州": (23.1291, 113.2644),
+    "shenzhen": (22.5431, 114.0579),  "深圳": (22.5431, 114.0579),
+    "hangzhou": (30.2741, 120.1551),  "杭州": (30.2741, 120.1551),
+    "wuhan": (30.5928, 114.3055),     "武汉": (30.5928, 114.3055),
+    "nanjing": (32.0603, 118.7969),   "南京": (32.0603, 118.7969),
+    "xian": (34.3416, 108.9398),      "西安": (34.3416, 108.9398),
+    "chongqing": (29.4316, 106.9123), "重庆": (29.4316, 106.9123),
+    "tianjin": (39.3434, 117.3616),   "天津": (39.3434, 117.3616),
+    "hong kong": (22.3193, 114.1694), "香港": (22.3193, 114.1694),
+    "taipei": (25.0330, 121.5654),    "台北": (25.0330, 121.5654),
+    # UK / Europe
+    "london": (51.5074, -0.1278),     "paris": (48.8566, 2.3522),
+    "berlin": (52.5200, 13.4050),     "amsterdam": (52.3676, 4.9041),
+    "barcelona": (41.3851, 2.1734),   "rome": (41.9028, 12.4964),
+    "madrid": (40.4168, -3.7038),     "zurich": (47.3769, 8.5417),
+    "vienna": (48.2082, 16.3738),     "stockholm": (59.3293, 18.0686),
+    "edinburgh": (55.9533, -3.1883),  "manchester": (53.4808, -2.2426),
+    # Americas
+    "new york": (40.7128, -74.0060),  "los angeles": (34.0522, -118.2437),
+    "chicago": (41.8781, -87.6298),   "toronto": (43.6532, -79.3832),
+    "mexico city": (19.4326, -99.1332),
+    "sao paulo": (-23.5505, -46.6333),
+    # Asia-Pacific
+    "tokyo": (35.6762, 139.6503),     "osaka": (34.6937, 135.5023),
+    "seoul": (37.5665, 126.9780),     "singapore": (1.3521, 103.8198),
+    "sydney": (-33.8688, 151.2093),   "melbourne": (-37.8136, 144.9631),
+    # Middle East / Africa
+    "dubai": (25.2048, 55.2708),      "istanbul": (41.0082, 28.9784),
+    "cairo": (30.0444, 31.2357),
+}
+
+
 # ── Contribution stats (global — for map display) ─────────────────────────────
 @app.route("/contributions/stats", methods=["GET"])
 def contribution_stats():
@@ -1320,9 +1360,9 @@ def contribution_stats():
         "SELECT COUNT(*) FROM contributions WHERE location IS NULL OR location=''"
     ).fetchone()[0]
 
-    # Named locations with lat/lng
-    locations = conn.execute("""
-        SELECT location, lat, lng, COUNT(*) as cnt
+    # Named locations — use AVG so mixed groups (some rows have lat/lng, some don't) still work
+    rows = conn.execute("""
+        SELECT location, AVG(lat) as lat, AVG(lng) as lng, COUNT(*) as cnt
         FROM contributions
         WHERE location IS NOT NULL AND location != ''
         GROUP BY location ORDER BY cnt DESC LIMIT 50
@@ -1334,13 +1374,24 @@ def contribution_stats():
     """).fetchall()
 
     conn.close()
+
+    locations = []
+    for r in rows:
+        lat, lng = r["lat"], r["lng"]
+        if lat is None or lng is None:
+            loc_lower = (r["location"] or "").lower()
+            for key, (fb_lat, fb_lng) in CITY_FALLBACK.items():
+                if key in loc_lower:
+                    lat, lng = fb_lat, fb_lng
+                    break
+        locations.append({"location": r["location"], "lat": lat, "lng": lng, "count": r["cnt"]})
+
     return jsonify({
-        "total":    total,
-        "uploaded": uploaded,
-        "unknown":  unknown,
-        "locations": [{"location": r[0], "lat": r[1], "lng": r[2], "count": r[3]}
-                      for r in locations],
-        "recent":   [dict(r) for r in recent],
+        "total":     total,
+        "uploaded":  uploaded,
+        "unknown":   unknown,
+        "locations": locations,
+        "recent":    [dict(r) for r in recent],
     })
 
 
@@ -1426,6 +1477,45 @@ def admin_download_all():
     return send_file(mem, mimetype="application/zip",
                      as_attachment=True,
                      download_name="all_detection_images.zip")
+
+
+# ── Admin: list all contributions ────────────────────────────────────────────
+@app.route("/admin/contributions", methods=["GET"])
+@require_admin
+def admin_contributions():
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT c.id, c.contributor, c.location, c.timestamp,
+               c.image_path, c.status, c.mycelium_type,
+               u.username
+        FROM contributions c
+        LEFT JOIN users u ON c.user_id = u.id
+        ORDER BY c.id DESC
+    """).fetchall()
+    conn.close()
+    return jsonify({"contributions": [dict(r) for r in rows]})
+
+
+# ── Admin: clear all detection records + image files ─────────────────────────
+@app.route("/admin/clear-detections", methods=["POST"])
+@require_admin
+def admin_clear_detections():
+    conn = get_db()
+    img_rows = conn.execute(
+        "SELECT image_path FROM detections WHERE image_path IS NOT NULL"
+    ).fetchall()
+    deleted_files = 0
+    for row in img_rows:
+        img_path = os.path.join(UPLOAD_FOLDER, row["image_path"])
+        if os.path.exists(img_path):
+            os.remove(img_path)
+            deleted_files += 1
+    count = conn.execute("SELECT COUNT(*) FROM detections").fetchone()[0]
+    conn.execute("DELETE FROM detections")
+    conn.commit()
+    conn.close()
+    print(f"🗑️ Admin cleared {count} detections, {deleted_files} image files removed", flush=True)
+    return jsonify({"success": True, "deleted_records": count, "deleted_files": deleted_files})
 
 
 # ── Admin page (HTML) ─────────────────────────────────────────────────────────

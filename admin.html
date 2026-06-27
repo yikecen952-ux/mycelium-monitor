@@ -8,20 +8,22 @@
   :root {
     --bg: #F8F8F6; --surface: #fff; --text: #1A1A1A; --text-2: #555;
     --text-3: #999; --border: #E5E5E2; --green: #4A7C59; --green-bg: #EDF3EE;
+    --red: #B3261E; --red-bg: #FDECEA;
     --r: 8px; --shadow: 0 1px 3px rgba(0,0,0,0.06);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5;
-    padding: 0;
   }
   .topbar {
     background: var(--surface); border-bottom: 1px solid var(--border);
     padding: 16px 32px; display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap;
   }
   .topbar h1 { font-size: 16px; font-weight: 600; }
   .topbar .sub { font-size: 12px; color: var(--text-3); margin-top: 2px; }
+  .topbar-actions { display: flex; gap: 10px; align-items: center; }
   .container { max-width: 1200px; margin: 0 auto; padding: 32px; }
 
   /* Login */
@@ -45,20 +47,31 @@
   }
   button:hover { opacity: 0.88; }
   .btn-primary { background: var(--text); color: #fff; padding: 10px 20px; font-size: 13px; width: 100%; }
-  .btn-green { background: var(--green); color: #fff; padding: 10px 20px; font-size: 13px; }
-  .err { font-size: 12px; color: #B3261E; min-height: 16px; margin-bottom: 8px; }
+  .btn-green  { background: var(--green); color: #fff; padding: 10px 20px; font-size: 13px; }
+  .btn-red    { background: var(--red);   color: #fff; padding: 10px 20px; font-size: 13px; }
+  .btn-ghost  {
+    background: transparent; color: var(--red); padding: 10px 20px; font-size: 13px;
+    border: 1.5px solid var(--red);
+  }
+  .err { font-size: 12px; color: var(--red); min-height: 16px; margin-bottom: 8px; }
 
   /* Dashboard */
   #admin-view { display: none; }
-  .stats-row { display: flex; gap: 16px; margin-bottom: 24px; }
+  .stats-row { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
   .stat {
     background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--r); padding: 16px 20px; flex: 1;
+    border-radius: var(--r); padding: 16px 20px; flex: 1; min-width: 120px;
   }
   .stat .num { font-size: 28px; font-weight: 600; }
   .stat .label { font-size: 12px; color: var(--text-3); margin-top: 2px; }
-  .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+
+  /* Section */
+  .section { margin-bottom: 40px; }
+  .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px; flex-wrap: wrap; }
   .toolbar h2 { font-size: 15px; }
+  .toolbar-right { display: flex; align-items: center; gap: 12px; }
+
+  /* Detection gallery */
   .gallery {
     display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: 16px;
@@ -71,13 +84,50 @@
   .img-meta { padding: 10px 12px; }
   .img-meta .sample { font-size: 13px; font-weight: 600; }
   .img-meta .detail { font-size: 11px; color: var(--text-3); margin-top: 2px; }
-  .img-meta .user { font-size: 11px; color: var(--green); margin-top: 4px; }
+  .img-meta .user   { font-size: 11px; color: var(--green); margin-top: 4px; }
   .dl-btn {
     display: block; text-align: center; margin: 8px 12px 12px;
     background: var(--green-bg); color: var(--green); padding: 6px;
     font-size: 11px; font-weight: 600; border-radius: 6px; text-decoration: none;
   }
+
+  /* Contributions table */
+  .contrib-table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: var(--r); overflow: hidden; border: 1px solid var(--border); }
+  .contrib-table th {
+    text-align: left; font-size: 11px; font-weight: 600; color: var(--text-3);
+    padding: 10px 14px; background: var(--bg); border-bottom: 1px solid var(--border);
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .contrib-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; font-size: 13px; }
+  .contrib-table tr:last-child td { border-bottom: none; }
+  .contrib-table tr:hover td { background: #fafaf8; }
+  .contrib-thumb { width: 56px; height: 56px; object-fit: cover; border-radius: 6px; display: block; background: var(--bg); }
+  .contrib-thumb-wrap { display: flex; align-items: center; gap: 8px; }
+  .dl-sm {
+    display: inline-block; font-size: 11px; font-weight: 600; color: var(--green);
+    background: var(--green-bg); padding: 3px 8px; border-radius: 4px; text-decoration: none; white-space: nowrap;
+  }
+  .tag-status {
+    display: inline-block; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 10px;
+  }
+  .tag-uploaded { background: #E6F4EA; color: #2E7D32; }
+  .tag-pending  { background: #FFF3E0; color: #E65100; }
+
   .empty { text-align: center; color: var(--text-3); padding: 60px; font-size: 14px; }
+
+  /* Modal overlay */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+    z-index: 1000; align-items: center; justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-box {
+    background: var(--surface); border-radius: var(--r); padding: 28px 32px;
+    max-width: 400px; width: 90%; box-shadow: 0 8px 32px rgba(0,0,0,0.16);
+  }
+  .modal-box h3 { font-size: 16px; margin-bottom: 10px; }
+  .modal-box p  { font-size: 13px; color: var(--text-2); margin-bottom: 20px; line-height: 1.6; }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
 </style>
 </head>
 <body>
@@ -101,22 +151,66 @@
   <div class="topbar">
     <div>
       <h1>SYMBIO-FRAME · Admin</h1>
-      <div class="sub">Detection image management</div>
+      <div class="sub">Data management</div>
     </div>
-    <button class="btn-green" onclick="downloadAll()">⬇ Download all images (ZIP)</button>
+    <div class="topbar-actions">
+      <button class="btn-green" onclick="downloadAll()">⬇ Download all images (ZIP)</button>
+    </div>
   </div>
+
   <div class="container">
+    <!-- Stats -->
     <div class="stats-row">
       <div class="stat"><div class="num" id="s-images">—</div><div class="label">Detection images</div></div>
       <div class="stat"><div class="num" id="s-users">—</div><div class="label">Registered users</div></div>
       <div class="stat"><div class="num" id="s-contribs">—</div><div class="label">Contributions</div></div>
     </div>
-    <div class="toolbar">
-      <h2>All detection images</h2>
-      <span style="font-size:12px;color:var(--text-3)" id="img-count"></span>
+
+    <!-- Detection images section -->
+    <div class="section">
+      <div class="toolbar">
+        <h2>All detection images</h2>
+        <div class="toolbar-right">
+          <span style="font-size:12px;color:var(--text-3)" id="img-count"></span>
+          <button class="btn-ghost" onclick="openClearModal()">🗑 Clear all detections</button>
+        </div>
+      </div>
+      <div class="gallery" id="gallery"></div>
+      <div class="empty" id="det-empty" style="display:none">No detection images yet.</div>
     </div>
-    <div class="gallery" id="gallery"></div>
-    <div class="empty" id="empty" style="display:none">No detection images yet.</div>
+
+    <!-- Contributions section -->
+    <div class="section">
+      <div class="toolbar">
+        <h2>All contributions</h2>
+        <span style="font-size:12px;color:var(--text-3)" id="contrib-count"></span>
+      </div>
+      <table class="contrib-table" id="contrib-table">
+        <thead>
+          <tr>
+            <th>Image</th>
+            <th>Contributor</th>
+            <th>Location</th>
+            <th>Submitted</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="contrib-body"></tbody>
+      </table>
+      <div class="empty" id="contrib-empty" style="display:none">No contributions yet.</div>
+    </div>
+  </div>
+</div>
+
+<!-- Clear detections confirmation modal -->
+<div class="modal-overlay" id="clear-modal">
+  <div class="modal-box">
+    <h3>Clear all detection images?</h3>
+    <p id="clear-modal-msg">This will permanently delete all detection records and their image files. Contributions and samples are NOT affected. This cannot be undone.</p>
+    <div class="modal-actions">
+      <button class="btn-primary" style="width:auto" onclick="closeClearModal()">Cancel</button>
+      <button class="btn-red" onclick="clearDetections()">Yes, delete all</button>
+    </div>
   </div>
 </div>
 
@@ -147,18 +241,24 @@ async function login() {
 function authHeaders() { return { 'Authorization': 'Bearer ' + TOKEN }; }
 
 async function loadData() {
-  // Load images
+  loadDetections();
+  loadUsers();
+  loadContributions();
+}
+
+async function loadDetections() {
   try {
     const r = await fetch(`${API}/admin/images`, { headers: authHeaders() });
     const d = await r.json();
     const imgs = d.images || [];
     document.getElementById('s-images').textContent = imgs.length;
     document.getElementById('img-count').textContent = imgs.length + ' images';
-    const gallery = document.getElementById('gallery');
-    const empty = document.getElementById('empty');
-    if (!imgs.length) { empty.style.display = 'block'; gallery.innerHTML = ''; }
-    else {
-      empty.style.display = 'none';
+    const gallery  = document.getElementById('gallery');
+    const emptyEl  = document.getElementById('det-empty');
+    if (!imgs.length) {
+      emptyEl.style.display = 'block'; gallery.innerHTML = '';
+    } else {
+      emptyEl.style.display = 'none';
       gallery.innerHTML = imgs.map(im => `
         <div class="img-card">
           <img src="${API}/image/${im.image_path}" loading="lazy"
@@ -173,37 +273,99 @@ async function loadData() {
       `).join('');
     }
   } catch(e) { console.error(e); }
+}
 
-  // Load users count
+async function loadUsers() {
   try {
     const r = await fetch(`${API}/admin/users`, { headers: authHeaders() });
     const d = await r.json();
     document.getElementById('s-users').textContent = (d.users||[]).length;
   } catch(e) {}
+}
 
-  // Load contributions count
+async function loadContributions() {
   try {
-    const r = await fetch(`${API}/contributions/stats`);
+    const r = await fetch(`${API}/admin/contributions`, { headers: authHeaders() });
     const d = await r.json();
-    document.getElementById('s-contribs').textContent = d.total ?? 0;
-  } catch(e) {}
+    const items = d.contributions || [];
+    document.getElementById('s-contribs').textContent = items.length;
+    document.getElementById('contrib-count').textContent = items.length + ' contributions';
+    const tbody   = document.getElementById('contrib-body');
+    const emptyEl = document.getElementById('contrib-empty');
+    const table   = document.getElementById('contrib-table');
+    if (!items.length) {
+      emptyEl.style.display = 'block'; table.style.display = 'none';
+    } else {
+      emptyEl.style.display = 'none'; table.style.display = '';
+      tbody.innerHTML = items.map(c => {
+        const ts     = (c.timestamp || '').slice(0, 16).replace('T', ' ');
+        const loc    = c.location || '—';
+        const name   = c.contributor || 'anonymous';
+        const status = c.status === 'uploaded'
+          ? '<span class="tag-status tag-uploaded">uploaded</span>'
+          : '<span class="tag-status tag-pending">pending</span>';
+        const imgHtml = c.image_path
+          ? `<div class="contrib-thumb-wrap">
+               <a href="${API}/image/${c.image_path}" target="_blank">
+                 <img class="contrib-thumb" src="${API}/image/${c.image_path}" loading="lazy"
+                      onerror="this.style.display='none'">
+               </a>
+               <a class="dl-sm" href="${API}/image/${c.image_path}" download>Download</a>
+             </div>`
+          : '—';
+        return `<tr>
+          <td>${imgHtml}</td>
+          <td>${esc(name)}</td>
+          <td>${esc(loc)}</td>
+          <td style="white-space:nowrap;color:var(--text-3)">${ts}</td>
+          <td>${status}</td>
+        </tr>`;
+      }).join('');
+    }
+  } catch(e) { console.error(e); }
 }
 
 async function downloadAll() {
-  // Fetch ZIP with auth header, then trigger download
   try {
     const r = await fetch(`${API}/admin/download-all`, { headers: authHeaders() });
     if (!r.ok) { alert('Download failed'); return; }
     const blob = await r.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
     a.href = url; a.download = 'all_detection_images.zip';
     document.body.appendChild(a); a.click();
     document.body.removeChild(a); URL.revokeObjectURL(url);
   } catch(e) { alert('Download error: ' + e.message); }
 }
 
-// Enter key
+function openClearModal() {
+  const count = document.getElementById('s-images').textContent;
+  document.getElementById('clear-modal-msg').textContent =
+    `This will permanently delete ${count} detection record(s) and their image files. ` +
+    'Contributions and samples are NOT affected. This cannot be undone.';
+  document.getElementById('clear-modal').classList.add('open');
+}
+function closeClearModal() {
+  document.getElementById('clear-modal').classList.remove('open');
+}
+
+async function clearDetections() {
+  closeClearModal();
+  try {
+    const r = await fetch(`${API}/admin/clear-detections`, {
+      method: 'POST', headers: authHeaders()
+    });
+    const d = await r.json();
+    if (!d.success) { alert('Clear failed'); return; }
+    alert(`Done. Deleted ${d.deleted_records} record(s) and ${d.deleted_files} image file(s).`);
+    loadDetections();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
 document.getElementById('p').addEventListener('keydown', e => { if(e.key==='Enter') login(); });
 </script>
 </body>

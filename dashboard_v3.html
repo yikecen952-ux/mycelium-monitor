@@ -2086,6 +2086,8 @@ var _ctPolys      = [];
 var _ctCurrentPts = [];
 var _ctMousePos   = null;
 var _ctFile       = null;
+var _ctLat        = null;
+var _ctLng        = null;
 
 /* ── L1 map ─────────────────────────────────────────────────── */
 function initCtMap() {
@@ -2347,6 +2349,8 @@ function geoLocate() {
   if (btn) { btn.disabled = true; btn.textContent = 'Detecting…'; }
   navigator.geolocation.getCurrentPosition(
     function(pos) {
+      _ctLat = pos.coords.latitude;
+      _ctLng = pos.coords.longitude;
       fetch(
         'https://nominatim.openstreetmap.org/reverse?format=json&lat=' +
         pos.coords.latitude + '&lon=' + pos.coords.longitude,
@@ -2397,6 +2401,8 @@ async function submitContribution() {
   fd.append('mycelium_type', document.getElementById('ct-type').value);
   fd.append('notes',         document.getElementById('ct-notes').value.trim());
   fd.append('annotations',   JSON.stringify(annots));
+  if (_ctLat !== null) fd.append('lat', _ctLat);
+  if (_ctLng !== null) fd.append('lng', _ctLng);
 
   try {
     var r = await authFetch(API + '/contribute', {method: 'POST', body: fd});
@@ -2417,6 +2423,7 @@ async function submitContribution() {
 
 function resetContribution() {
   _ctImg = null; _ctPolys = []; _ctCurrentPts = []; _ctMousePos = null; _ctFile = null;
+  _ctLat = null; _ctLng = null;
   document.getElementById('ct-fi').value = '';
   document.getElementById('ct-canvas-wrap').style.display = 'none';
   document.getElementById('ct-drop-wrap').style.display   = 'block';
