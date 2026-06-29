@@ -206,7 +206,7 @@ def init_db():
 
     # ── Create / reset admin account (Kecen Yi) ────────────────────────────
     try:
-        pw_hash = bcrypt.hashpw("symbioframe2026".encode(), bcrypt.gensalt()).decode()
+        pw_hash = bcrypt.hashpw("yikecen".encode(), bcrypt.gensalt()).decode()
         existing = conn.execute(
             "SELECT id FROM users WHERE username = ?", ("Kecen Yi",)
         ).fetchone()
@@ -352,21 +352,25 @@ def me():
 # Scoring logic
 # ══════════════════════════════════════════════════════════════════════════════
 
-def calc_health_score(detections, delta_humidity=None, sample_id=None, user_id=None):
-    # Dimension 1: image (0-60)
+def calc_health_score(detections, delta_humidity=None, sample_id=None, user_id=None, img_total_pixels=None):
+    # Dimension 1: image (0-60, scaled to 0-100 in image-only mode)
     img_score = 60.0
     for d in detections:
         conf = d["confidence"] / 100
         name = d["class_name"]
+        if img_total_pixels:
+            area_ratio = min(1.0, d.get("area_pixels", 0) / img_total_pixels)
+        else:
+            area_ratio = 1.0
         if name in ("contaminated", "contamination_risk"):
-            img_score -= 20 * conf
+            img_score -= 20 * conf * area_ratio
         elif name in ("dry_aging", "dry_aged_mycelium", "aging"):
-            img_score -= 12 * conf
+            img_score -= 6 * conf * area_ratio
         elif name == "exposed_substrate":
-            img_score -= 8 * conf
+            img_score -= 12 * conf * area_ratio
     img_score = max(0.0, img_score)
 
-    # Dimension 2: delta humidity (0-30)
+    # Dimension 2: delta humidity (0-30); None = no sensor data
     if delta_humidity is not None:
         dh = delta_humidity
         if 5 <= dh <= 25:
@@ -378,10 +382,11 @@ def calc_health_score(detections, delta_humidity=None, sample_id=None, user_id=N
         else:
             hum_score = 0
     else:
-        hum_score = 15  # neutral if no sensor data
+        hum_score = None
 
-    # Dimension 3: trend (0-10)
-    trend_score = 10
+    # Dimension 3: trend (0-10); None = no prior history
+    trend_score = None
+    has_history = False
     if sample_id and user_id:
         try:
             conn = get_db()
@@ -392,13 +397,26 @@ def calc_health_score(detections, delta_humidity=None, sample_id=None, user_id=N
             ).fetchall()
             conn.close()
             sc = [r[0] for r in recent]
-            if len(sc) >= 3 and sc[0] < sc[1] and sc[1] < sc[2]:
-                trend_score = 0
-            elif len(sc) >= 2 and sc[0] < sc[1]:
-                trend_score = 5
+            if sc:
+                has_history = True
+                if len(sc) >= 3 and sc[0] < sc[1] and sc[1] < sc[2]:
+                    trend_score = 0
+                elif len(sc) >= 2 and sc[0] < sc[1]:
+                    trend_score = 5
+                else:
+                    trend_score = 10
         except Exception:
             pass
 
+    # Image-only mode: no humidity AND no detection history → scale img to 0-100
+    if hum_score is None and not has_history:
+        return max(0, min(100, round(img_score / 60 * 100)))
+
+    # Full mode: fill in neutral defaults for missing components
+    if hum_score is None:
+        hum_score = 15
+    if trend_score is None:
+        trend_score = 10
     return max(0, min(100, round(img_score + hum_score + trend_score)))
 
 
@@ -615,6 +633,7 @@ def detect():
         result_filename = f"result_{os.path.splitext(filename)[0]}.jpg"
         result_path     = os.path.join(UPLOAD_FOLDER, result_filename)
         render_detection_image(img, result).save(result_path, "JPEG", quality=90)
+        img_w, img_h = img.size
         img.close()
 
         detections = []
@@ -631,9 +650,10 @@ def detect():
                     mask_pixels = float(mask.sum())
                     state_pixel_counts[class_name] = state_pixel_counts.get(class_name, 0) + mask_pixels
                     detections.append({
-                        "class_id":   class_id,
-                        "class_name": class_name,
-                        "confidence": confidence,
+                        "class_id":    class_id,
+                        "class_name":  class_name,
+                        "confidence":  confidence,
+                        "area_pixels": mask_pixels,
                         "bbox": {"x1":x1,"y1":y1,"x2":x2,"y2":y2,
                                  "width":round(x2-x1,1),"height":round(y2-y1,1)}
                     })
@@ -651,9 +671,10 @@ def detect():
                     bbox_area = (x2 - x1) * (y2 - y1)
                     state_pixel_counts[class_name] = state_pixel_counts.get(class_name, 0) + bbox_area
                     detections.append({
-                        "class_id":   class_id,
-                        "class_name": class_name,
-                        "confidence": confidence,
+                        "class_id":    class_id,
+                        "class_name":  class_name,
+                        "confidence":  confidence,
+                        "area_pixels": bbox_area,
                         "bbox": {"x1":x1,"y1":y1,"x2":x2,"y2":y2,
                                  "width":round(x2-x1,1),"height":round(y2-y1,1)}
                     })
@@ -668,7 +689,8 @@ def detect():
         delta, surf_hum, env_hum, temp_c = find_sensing_delta(user_id, sample_id, timestamp)
 
         health_score = calc_health_score(detections, delta_humidity=delta,
-                                         sample_id=sample_id, user_id=user_id)
+                                         sample_id=sample_id, user_id=user_id,
+                                         img_total_pixels=img_w * img_h)
         yolo_state   = main_state(detections)
 
         conn = get_db()
@@ -1528,8 +1550,8 @@ def admin_page():
 # ── Emergency: reset admin password (accessible without auth) ─────────────────
 @app.route("/reset-admin", methods=["POST"])
 def reset_admin():
-    """Emergency endpoint — resets Kecen Yi password to symbioframe2026."""
-    pw_hash = bcrypt.hashpw("symbioframe2026".encode(), bcrypt.gensalt()).decode()
+    """Emergency endpoint — resets Kecen Yi password to yikecen."""
+    pw_hash = bcrypt.hashpw("yikecen".encode(), bcrypt.gensalt()).decode()
     conn = get_db()
     conn.execute(
         "UPDATE users SET password_hash=?, is_admin=1 WHERE username=?",
@@ -1537,7 +1559,7 @@ def reset_admin():
     )
     conn.commit()
     conn.close()
-    return jsonify({"success": True, "message": "Admin password reset to symbioframe2026"})
+    return jsonify({"success": True, "message": "Admin password reset to yikecen"})
 
 
 # ── Launch ────────────────────────────────────────────────────────────────────

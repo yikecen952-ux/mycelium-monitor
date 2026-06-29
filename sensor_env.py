@@ -16,7 +16,7 @@ from pathlib import Path
 #  Change these before each session
 # ══════════════════════════════════════════════════════
 PORT       = "COM4"
-SAMPLE_ID  = "MYC-A1"    # Must match sensor_surface.py
+SAMPLE_ID  = "MYC-B1"    # Must match sensor_surface.py
 
 SEND_TO_DB = False        # True  → also send to backend database (1-min reading mode)
                           # False → save to CSV only (independent data collection)

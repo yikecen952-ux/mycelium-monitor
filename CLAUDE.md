@@ -1,4 +1,4 @@
-# CLAUDE.md — SYMBIO-FRAME Mycelium Health Monitor
+# CLAUDE.md — MYCOLOGIC Mycelium Health Monitor
 
 Project guidance for Claude Code. Read this before making changes.
 

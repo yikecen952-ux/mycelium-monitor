@@ -16,7 +16,7 @@ from pathlib import Path
 #  Change these before each session
 # ══════════════════════════════════════════════════════
 PORT       = "COM7"
-SAMPLE_ID  = "MYC-A1"    # Which sample point today
+SAMPLE_ID  = "YKC"    # Which sample point today
 
 SEND_TO_DB = False        # True  → also send to backend database (1-min reading mode)
                           # False → save to CSV only (independent data collection)
