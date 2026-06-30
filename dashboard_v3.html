@@ -500,8 +500,8 @@ section { scroll-margin-top: 106px; }
 }
 .arc-upload-sm:hover { background: var(--brown-dk); color: #fff; }
 .arc-det-top {
-  display: grid; grid-template-columns: 1fr 2fr 1fr; gap: 20px;
-  margin-bottom: 20px; align-items: start;
+  display: grid; grid-template-columns: 1fr 2fr 150px; gap: 20px;
+  margin-bottom: 16px; align-items: start;
 }
 .arc-upload-col {
   background: var(--surface-2); border-radius: var(--r);
@@ -519,10 +519,38 @@ section { scroll-margin-top: 106px; }
   display: flex; align-items: center; justify-content: center;
   color: var(--brown-lt); font-size: 36px;
 }
-.arc-metrics-col {
+.arc-score-col {
   background: var(--surface); border: 1px solid var(--brown-lt);
-  border-radius: var(--r); padding: 18px;
+  border-radius: var(--r); padding: 16px 12px 20px;
+  display: flex; flex-direction: column; align-items: center;
+  text-align: center; gap: 10px;
 }
+.arc-score-col-label {
+  font-size: 10px; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--brown-md); width: 100%;
+}
+.arc-detail-row {
+  display: none; grid-template-columns: 1fr 1fr 1fr; gap: 16px;
+  margin-bottom: 20px; align-items: stretch;
+}
+.arc-detail-row.visible { display: grid; }
+.arc-detail-card {
+  background: #fff; border: 1px solid #eeebe5;
+  border-radius: 8px; padding: 16px 18px;
+  display: flex; flex-direction: column;
+}
+.arc-card-title {
+  font-size: 11px; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--brown-md); margin-bottom: 10px;
+  flex-shrink: 0;
+}
+.arc-card-row {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 13px; padding: 6px 0; border-bottom: 1px solid #f0ede8;
+}
+.arc-card-row:last-of-type { border-bottom: none; }
+.arc-card-key { color: var(--text-2); }
+.arc-card-val { color: var(--text); font-weight: 600; }
 .arc-hist-row {
   display: flex; gap: 12px; overflow-x: auto;
   padding: 4px 4px 12px 4px; /* top/right/bottom/left: room for 2px sel outline, extra bottom for scrollbar */
@@ -1714,14 +1742,21 @@ function renderMsArchive(d) {
         : '<div class="arc-main-ph">○</div>')
     + '</div>';
 
-  var metricsCol = '<div class="arc-metrics-col">'
-    + '<div id="arc-metrics-panel"><div style="color:var(--text-3);font-size:12px">Run a detection or select a photo below.</div></div>'
-    + '<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--brown-lt)">'
-    + '<button class="arc-upload-sm" style="width:100%" onclick="showSensingUploadModal(\'' + esc(sid) + '\')">Upload sensing data (CSV)</button>'
+  var scoreCol = '<div class="arc-score-col">'
+    + '<div class="arc-score-col-label">Health score</div>'
+    + '<div id="arc-score-ring" style="line-height:0"><div style="width:130px;height:130px;display:flex;align-items:center;justify-content:center;color:var(--text-3);font-size:28px;font-weight:200">—</div></div>'
+    + '<div id="arc-score-badge"></div>'
+    + '</div>';
+
+  var detailRow = '<div class="arc-detail-row" id="arc-detail-row">'
+    + '<div class="arc-detail-card"><div class="arc-card-title">Score breakdown</div><div id="arc-breakdown-panel"></div></div>'
+    + '<div class="arc-detail-card"><div class="arc-card-title">Detections found</div><div id="arc-detections-panel"></div></div>'
+    + '<div class="arc-detail-card"><div class="arc-card-title">Sensing</div><div id="arc-sensing-panel" style="flex:1"></div>'
+    + '<button class="arc-upload-sm" style="width:100%;margin-top:16px;flex-shrink:0" onclick="showSensingUploadModal(\'' + esc(sid) + '\')">Upload sensing data (CSV)</button>'
     + '</div>'
     + '</div>';
 
-  var detTop = '<div class="arc-det-top">' + uploadCol + mainCol + metricsCol + '</div>';
+  var detTop = '<div class="arc-det-top">' + uploadCol + mainCol + scoreCol + '</div>' + detailRow;
 
   var histCards = '';
   if (dets.length) {
@@ -1856,23 +1891,26 @@ function selectArchiveDet(idx) {
   });
 }
 
-function drawScoreRing(score, color) {
-  var r = 38, cx = 50, cy = 50, sw = 9;
+function drawScoreRing(score, color, size) {
+  size = size || 100;
+  var half = size / 2;
+  var r    = half * 0.76;
+  var sw   = size * 0.09;
   var circ = 2 * Math.PI * r;
   var dash = Math.max(0, Math.min(1, score / 100)) * circ;
-  return '<svg width="100" height="100" viewBox="0 0 100 100" style="display:block">'
-    + '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="var(--brown-lt)" stroke-width="' + sw + '"/>'
-    + '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + color + '" stroke-width="' + sw + '"'
+  var fs1  = Math.round(size * 0.22);
+  var fs2  = Math.round(size * 0.09);
+  return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '" style="display:block">'
+    + '<circle cx="' + half + '" cy="' + half + '" r="' + r.toFixed(1) + '" fill="none" stroke="var(--brown-lt)" stroke-width="' + sw.toFixed(1) + '"/>'
+    + '<circle cx="' + half + '" cy="' + half + '" r="' + r.toFixed(1) + '" fill="none" stroke="' + color + '" stroke-width="' + sw.toFixed(1) + '"'
     + ' stroke-dasharray="' + dash.toFixed(1) + ' ' + circ.toFixed(1) + '"'
-    + ' stroke-linecap="round" transform="rotate(-90 ' + cx + ' ' + cy + ')"/>'
-    + '<text x="' + cx + '" y="' + (cy - 4) + '" text-anchor="middle" font-size="22" font-weight="300" fill="' + color + '">' + score + '</text>'
-    + '<text x="' + cx + '" y="' + (cy + 12) + '" text-anchor="middle" font-size="9" fill="var(--text-3)">/100</text>'
+    + ' stroke-linecap="round" transform="rotate(-90 ' + half + ' ' + half + ')"/>'
+    + '<text x="' + half + '" y="' + (half - size * 0.04).toFixed(1) + '" text-anchor="middle" font-size="' + fs1 + '" font-weight="300" fill="' + color + '">' + score + '</text>'
+    + '<text x="' + half + '" y="' + (half + size * 0.12).toFixed(1) + '" text-anchor="middle" font-size="' + fs2 + '" fill="var(--text-3)">/100</text>'
     + '</svg>';
 }
 
 function renderArcMetrics(det) {
-  var panel = document.getElementById('arc-metrics-panel');
-  if (!panel) return;
   var sc      = det.health_score != null ? det.health_score : null;
   var scColor = sc != null ? scoreColor(sc) : 'var(--text-3)';
 
@@ -1904,69 +1942,80 @@ function renderArcMetrics(det) {
   var trendScore = bd ? bd.trend : trendFromHistory();
   var hasHum     = bd ? bd.has_humidity : (det.delta_humidity != null);
 
-  /* Warning label */
-  var warnHtml = '';
-  if (sc != null && sc < 60) {
-    var warnColor = sc < 40 ? 'var(--h-danger)' : 'var(--h-warn)';
-    var warnText  = sc < 40 ? 'Critical' : 'Warning';
-    warnHtml = '<div style="margin-top:6px;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:' + warnColor + '">' + warnText + '</div>';
+  /* ── Row 1 right col: big ring + badge ── */
+  var ringEl  = document.getElementById('arc-score-ring');
+  var badgeEl = document.getElementById('arc-score-badge');
+  if (ringEl) {
+    ringEl.innerHTML = sc != null
+      ? drawScoreRing(sc, scColor, 130)
+      : '<div style="width:130px;height:130px;display:flex;align-items:center;justify-content:center;color:var(--text-3);font-size:28px;font-weight:200">—</div>';
+  }
+  if (badgeEl) {
+    var warnHtml = '';
+    if (sc != null && sc < 60) {
+      var warnColor = sc < 40 ? 'var(--h-danger)' : 'var(--h-warn)';
+      var warnText  = sc < 40 ? 'Critical' : 'Warning';
+      warnHtml = '<div style="margin-top:8px;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:' + warnColor + '">' + warnText + '</div>';
+    }
+    badgeEl.innerHTML = badge(det.yolo_state) + warnHtml;
   }
 
-  var html = '<div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--brown-md);margin-bottom:10px">Health score</div>';
+  /* ── Show detail row ── */
+  var detailRow = document.getElementById('arc-detail-row');
+  if (detailRow) detailRow.classList.add('visible');
 
-  /* Ring + badge row */
-  html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">'
-    + (sc != null ? drawScoreRing(sc, scColor) : '<div style="width:100px;height:100px;display:flex;align-items:center;justify-content:center;color:var(--text-3);font-size:12px">—</div>')
-    + '<div>' + badge(det.yolo_state) + warnHtml + '</div>'
-    + '</div>';
+  /* ── Card 1: Score breakdown ── */
+  var bdPanel = document.getElementById('arc-breakdown-panel');
+  if (bdPanel) {
+    var bdHtml = '';
+    bdHtml += '<div class="arc-card-row"><span class="arc-card-key">Image</span><span class="arc-card-val" style="color:' + scColor + '">' + (imgScore != null ? imgScore + '/60' : '—/60') + '</span></div>';
+    if (hasHum) {
+      bdHtml += '<div class="arc-card-row"><span class="arc-card-key">Humidity</span><span class="arc-card-val">' + (humScore != null ? humScore + '/30' : '—/30') + '</span></div>';
+    } else {
+      bdHtml += '<div class="arc-card-row"><span class="arc-card-key" style="color:var(--text-3)">Humidity</span><span style="color:var(--text-3)">--/30</span></div>';
+    }
+    bdHtml += '<div class="arc-card-row"><span class="arc-card-key">Trend</span><span class="arc-card-val">' + (trendScore != null ? trendScore + '/10' : '—/10') + '</span></div>';
+    bdPanel.innerHTML = bdHtml;
+  }
 
-  /* Score breakdown */
-  html += '<div style="margin-top:4px;padding-top:10px;border-top:1px solid var(--brown-lt)">'
-    + '<div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--brown-md);margin-bottom:6px">Score breakdown</div>';
-  html += '<div class="det-row"><span class="det-key">Image</span><span style="color:' + scColor + '">' + (imgScore != null ? imgScore + '/60' : '—/60') + '</span></div>';
-  if (hasHum) {
-    html += '<div class="det-row"><span class="det-key">Humidity</span><span>' + (humScore != null ? humScore + '/30' : '—/30') + '</span></div>';
-  } else {
-    html += '<div class="det-row"><span class="det-key" style="color:var(--text-3)">Humidity</span><span style="color:var(--text-3)">--/30</span></div>';
+  /* ── Card 2: Detections found ── */
+  var detPanel = document.getElementById('arc-detections-panel');
+  if (detPanel) {
+    var areas = null;
+    if (det.state_areas) {
+      try { areas = (typeof det.state_areas === 'string') ? JSON.parse(det.state_areas) : det.state_areas; } catch(e) {}
+    }
+    var AREA_LABELS = {
+      'healthy_mycelium': 'Healthy', 'dry_aged_mycelium': 'Dry / aged',
+      'contamination_risk': 'Contamination risk', 'exposed_substrate': 'Exposed substrate'
+    };
+    var areaOrder = ['healthy_mycelium','dry_aged_mycelium','contamination_risk','exposed_substrate'];
+    var detHtml = '';
+    if (areas && areaOrder.some(function(k){ return areas[k] != null; })) {
+      areaOrder.forEach(function(cls) {
+        if (areas[cls] != null)
+          detHtml += '<div class="arc-card-row"><span class="arc-card-key">' + AREA_LABELS[cls] + '</span><span class="arc-card-val">' + areas[cls] + '%</span></div>';
+      });
+    } else {
+      detHtml = '<div style="font-size:12px;color:var(--text-3);padding:4px 0">No area data for this detection</div>';
+    }
+    detPanel.innerHTML = detHtml;
   }
-  html += '<div class="det-row"><span class="det-key">Trend</span><span>' + (trendScore != null ? trendScore + '/10' : '—/10') + '</span></div>';
-  html += '</div>';
 
-  /* Area breakdown (state_areas stored as JSON string by backend) */
-  var areas = null;
-  if (det.state_areas) {
-    try { areas = (typeof det.state_areas === 'string') ? JSON.parse(det.state_areas) : det.state_areas; } catch(e) {}
+  /* ── Card 3: Sensing ── */
+  var sensPanel = document.getElementById('arc-sensing-panel');
+  if (sensPanel) {
+    var sensHtml = '';
+    if (det.surface_humidity != null || det.env_humidity != null || det.delta_humidity != null || det.temp_c != null) {
+      if (det.surface_humidity != null) sensHtml += '<div class="arc-card-row"><span class="arc-card-key">Surface RH</span><span class="arc-card-val">' + det.surface_humidity.toFixed(1) + '%</span></div>';
+      if (det.env_humidity    != null) sensHtml += '<div class="arc-card-row"><span class="arc-card-key">Env RH</span><span class="arc-card-val">' + det.env_humidity.toFixed(1) + '%</span></div>';
+      if (det.delta_humidity  != null) sensHtml += '<div class="arc-card-row"><span class="arc-card-key">Δ humidity</span><span class="arc-card-val">' + det.delta_humidity.toFixed(1) + '%</span></div>';
+      if (det.temp_c          != null) sensHtml += '<div class="arc-card-row"><span class="arc-card-key">Temp</span><span class="arc-card-val">' + det.temp_c.toFixed(1) + '°C</span></div>';
+    } else {
+      sensHtml = '<div style="font-size:12px;color:var(--text-3);padding:4px 0;line-height:1.6">No sensing data yet — upload surface &amp; env CSV to calculate humidity score.</div>';
+    }
+    sensPanel.innerHTML = sensHtml;
   }
-  var AREA_LABELS = {
-    'healthy_mycelium': 'Healthy', 'dry_aged_mycelium': 'Dry / aged',
-    'contamination_risk': 'Contamination risk', 'exposed_substrate': 'Exposed substrate'
-  };
-  var areaOrder = ['healthy_mycelium','dry_aged_mycelium','contamination_risk','exposed_substrate'];
-  /* Always show Detections found; old records (NULL state_areas) show a note instead */
-  html += '<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--brown-lt)">';
-  html += '<div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--brown-md);margin-bottom:8px">Detections found</div>';
-  if (areas && areaOrder.some(function(k){ return areas[k] != null; })) {
-    areaOrder.forEach(function(cls) {
-      if (areas[cls] != null) {
-        html += '<div class="det-row"><span class="det-key">' + AREA_LABELS[cls] + '</span><span>' + areas[cls] + '%</span></div>';
-      }
-    });
-  } else {
-    html += '<div style="font-size:11px;color:var(--text-3);padding:2px 0">Area data not stored for this detection</div>';
-  }
-  html += '</div>';
-
-  /* Sensing data */
-  if (det.surface_humidity != null || det.env_humidity != null || det.delta_humidity != null) {
-    html += '<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--brown-lt)">';
-    html += '<div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--brown-md);margin-bottom:8px">Sensing</div>';
-    if (det.surface_humidity != null) html += '<div class="det-row"><span class="det-key">Surface RH</span><span>' + det.surface_humidity.toFixed(1) + '%</span></div>';
-    if (det.env_humidity != null)     html += '<div class="det-row"><span class="det-key">Env RH</span><span>' + det.env_humidity.toFixed(1) + '%</span></div>';
-    if (det.delta_humidity != null)   html += '<div class="det-row"><span class="det-key">Δ humidity</span><span>' + det.delta_humidity.toFixed(1) + '%</span></div>';
-    if (det.temp_c != null)           html += '<div class="det-row"><span class="det-key">Temp</span><span>' + det.temp_c.toFixed(1) + '°C</span></div>';
-    html += '</div>';
-  }
-  panel.innerHTML = html;
 }
 
 function backToMsL1() {

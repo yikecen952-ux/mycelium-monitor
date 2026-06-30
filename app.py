@@ -594,13 +594,13 @@ def render_detection_image(base_img, result):
 
 
 def _add_legend_strip(img):
-    legend_h = 54
+    legend_h = 58
     w, h     = img.size
     canvas   = Image.new("RGB", (w, h + legend_h), (250, 248, 244))
     canvas.paste(img, (0, 0))
     draw   = ImageDraw.Draw(canvas)
-    font   = ImageFont.load_default(size=20)
-    swatch = 16
+    font   = ImageFont.load_default(size=24)
+    swatch = 18
     x = 16
     y = h + legend_h // 2
     for cls in LEGEND_ORDER:
