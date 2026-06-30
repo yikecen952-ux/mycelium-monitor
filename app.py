@@ -363,11 +363,11 @@ def calc_health_score(detections, delta_humidity=None, sample_id=None, user_id=N
         else:
             area_ratio = 1.0
         if name in ("contaminated", "contamination_risk"):
-            img_score -= 20 * conf * area_ratio
+            img_score -= 25 * conf * area_ratio
         elif name in ("dry_aging", "dry_aged_mycelium", "aging"):
-            img_score -= 6 * conf * area_ratio
+            img_score -= 8 * conf * area_ratio
         elif name == "exposed_substrate":
-            img_score -= 12 * conf * area_ratio
+            img_score -= 25 * conf * area_ratio
     img_score = max(0.0, img_score)
 
     # Dimension 2: delta humidity (0-30); None = no sensor data
