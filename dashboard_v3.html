@@ -1355,8 +1355,8 @@ function badge(s) {
   return '<span class="badge ' + (STATE_BADGE[s] || 'b-unknown') + '">' + stateLabel(s) + '</span>';
 }
 function scoreColor(sc) {
-  if (sc >= 75) return 'var(--brown-dk)';
-  if (sc >= 50) return 'var(--h-warn)';
+  if (sc >= 60) return '#4a9a5a';
+  if (sc >= 40) return 'var(--h-warn)';
   return 'var(--h-danger)';
 }
 
@@ -1811,8 +1811,13 @@ function renderMsArchive(d) {
           data: trendDetsChron.map(function(det) { return det.health_score || 0; }),
           borderColor: '#8A6946',
           backgroundColor: 'rgba(138,105,70,.08)',
-          tension: 0.3, pointRadius: 3,
-          pointBackgroundColor: '#8A6946',
+          tension: 0.3, pointRadius: 4,
+          pointBackgroundColor: trendDetsChron.map(function(det) {
+            return (det.health_score != null && det.health_score < 60) ? '#c0382b' : '#8A6946';
+          }),
+          pointRadius: trendDetsChron.map(function(det) {
+            return (det.health_score != null && det.health_score < 60) ? 5 : 3;
+          }),
           fill: true
         }]
       },
@@ -1845,15 +1850,79 @@ function selectArchiveDet(idx) {
   });
 }
 
+function drawScoreRing(score, color) {
+  var r = 38, cx = 50, cy = 50, sw = 9;
+  var circ = 2 * Math.PI * r;
+  var dash = Math.max(0, Math.min(1, score / 100)) * circ;
+  return '<svg width="100" height="100" viewBox="0 0 100 100" style="display:block">'
+    + '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="var(--brown-lt)" stroke-width="' + sw + '"/>'
+    + '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + color + '" stroke-width="' + sw + '"'
+    + ' stroke-dasharray="' + dash.toFixed(1) + ' ' + circ.toFixed(1) + '"'
+    + ' stroke-linecap="round" transform="rotate(-90 ' + cx + ' ' + cy + ')"/>'
+    + '<text x="' + cx + '" y="' + (cy - 4) + '" text-anchor="middle" font-size="22" font-weight="300" fill="' + color + '">' + score + '</text>'
+    + '<text x="' + cx + '" y="' + (cy + 12) + '" text-anchor="middle" font-size="9" fill="var(--text-3)">/100</text>'
+    + '</svg>';
+}
+
 function renderArcMetrics(det) {
   var panel = document.getElementById('arc-metrics-panel');
   if (!panel) return;
-  var sc = det.health_score != null ? det.health_score : '—';
-  var scColor = det.health_score != null ? scoreColor(det.health_score) : 'var(--text-3)';
-  var html = '<div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--brown-md);margin-bottom:10px">Health score</div>'
-    + '<div style="font-size:44px;font-weight:200;line-height:1;color:' + scColor + '">' + sc
-    + '<span style="font-size:15px;color:var(--text-3);margin-left:3px">/ 100</span></div>'
-    + '<div style="margin-top:10px">' + badge(det.yolo_state) + '</div>';
+  var sc      = det.health_score != null ? det.health_score : null;
+  var scColor = sc != null ? scoreColor(sc) : 'var(--text-3)';
+
+  /* Parse score breakdown */
+  var bd = null;
+  try { bd = det.score_breakdown ? (typeof det.score_breakdown === 'string' ? JSON.parse(det.score_breakdown) : det.score_breakdown) : null; } catch(e) {}
+
+  /* Infer hum component from delta if not in breakdown */
+  function humFromDelta(d) {
+    if (d == null) return null;
+    var a = Math.abs(d);
+    if (a < 5) return 30;
+    if (a <= 15) return Math.round(30 * (15 - a) / 10);
+    return 0;
+  }
+
+  /* Trend from recent _archiveDets (newest first) */
+  function trendFromHistory() {
+    var sc_arr = _archiveDets.map(function(d) { return d.health_score; }).filter(function(s) { return s != null; });
+    if (sc_arr.length >= 3 && sc_arr[0] < sc_arr[1] && sc_arr[1] < sc_arr[2]) return 0;
+    if (sc_arr.length >= 2 && sc_arr[0] < sc_arr[1]) return 5;
+    return 10;
+  }
+
+  var imgScore   = bd ? bd.img   : null;
+  var humScore   = bd ? bd.hum   : humFromDelta(det.delta_humidity);
+  var trendScore = bd ? bd.trend : trendFromHistory();
+  var hasHum     = bd ? bd.has_humidity : (det.delta_humidity != null);
+
+  /* Warning label */
+  var warnHtml = '';
+  if (sc != null && sc < 60) {
+    var warnColor = sc < 40 ? 'var(--h-danger)' : 'var(--h-warn)';
+    var warnText  = sc < 40 ? 'Critical' : 'Warning';
+    warnHtml = '<div style="margin-top:6px;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:' + warnColor + '">' + warnText + '</div>';
+  }
+
+  var html = '<div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--brown-md);margin-bottom:10px">Health score</div>';
+
+  /* Ring + badge row */
+  html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">'
+    + (sc != null ? drawScoreRing(sc, scColor) : '<div style="width:100px;height:100px;display:flex;align-items:center;justify-content:center;color:var(--text-3);font-size:12px">—</div>')
+    + '<div>' + badge(det.yolo_state) + warnHtml + '</div>'
+    + '</div>';
+
+  /* Score breakdown */
+  html += '<div style="margin-top:4px;padding-top:10px;border-top:1px solid var(--brown-lt)">'
+    + '<div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--brown-md);margin-bottom:6px">Score breakdown</div>';
+  html += '<div class="det-row"><span class="det-key">Image</span><span style="color:' + scColor + '">' + (imgScore != null ? imgScore + '/60' : '—/60') + '</span></div>';
+  if (hasHum) {
+    html += '<div class="det-row"><span class="det-key">Humidity</span><span>' + (humScore != null ? humScore + '/30' : '—/30') + '</span></div>';
+  } else {
+    html += '<div class="det-row"><span class="det-key" style="color:var(--text-3)">Humidity</span><span style="color:var(--text-3)">--/30</span></div>';
+  }
+  html += '<div class="det-row"><span class="det-key">Trend</span><span>' + (trendScore != null ? trendScore + '/10' : '—/10') + '</span></div>';
+  html += '</div>';
 
   /* Area breakdown (state_areas stored as JSON string by backend) */
   var areas = null;
@@ -2161,8 +2230,13 @@ async function submitSensingUpload() {
     var r = await authFetch(API + '/upload-csv', {method: 'POST', body: fd});
     var d = await r.json();
     if (!d.success) { err.textContent = d.error || 'Import failed.'; return; }
-    closeSensingUploadModal();
-    if (document.getElementById('ms-archive').style.display !== 'none') openMsArchive(_currentSampleId);
+    var msg = 'Imported ' + d.inserted + ' reading' + (d.inserted === 1 ? '' : 's');
+    if (d.rescored > 0) msg += ' · ' + d.rescored + ' detection' + (d.rescored === 1 ? '' : 's') + ' re-scored';
+    err.style.color = 'var(--h-ok)'; err.textContent = msg;
+    setTimeout(function() {
+      closeSensingUploadModal();
+      if (document.getElementById('ms-archive').style.display !== 'none') openMsArchive(_currentSampleId);
+    }, 1200);
   } catch(e) { err.textContent = 'Cannot reach server.'; }
   finally { btn.disabled = false; btn.textContent = 'Import data'; }
 }

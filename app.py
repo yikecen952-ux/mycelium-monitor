@@ -190,6 +190,7 @@ def init_db():
     migrations = [
         ("detections",       "user_id          INTEGER"),
         ("detections",       "state_areas      TEXT"),
+        ("detections",       "score_breakdown  TEXT"),
         ("surface_readings", "user_id          INTEGER"),
         ("env_readings",     "user_id          INTEGER"),
         ("contributions",    "user_id          INTEGER"),
@@ -352,41 +353,46 @@ def me():
 # Scoring logic
 # ══════════════════════════════════════════════════════════════════════════════
 
-def calc_health_score(detections, delta_humidity=None, sample_id=None, user_id=None, img_total_pixels=None):
-    # Dimension 1: image (0-60, scaled to 0-100 in image-only mode)
-    img_score = 60.0
-    for d in detections:
-        conf = d["confidence"] / 100
-        name = d["class_name"]
-        if img_total_pixels:
-            area_ratio = min(1.0, d.get("area_pixels", 0) / img_total_pixels)
-        else:
-            area_ratio = 1.0
-        if name in ("contaminated", "contamination_risk"):
-            img_score -= 30 * conf * area_ratio
-        elif name in ("dry_aging", "dry_aged_mycelium", "aging"):
-            img_score -= 15 * conf * area_ratio
-        elif name == "exposed_substrate":
-            img_score -= 25 * conf * area_ratio
-    img_score = max(0.0, img_score)
+def calc_health_score(detections, delta_humidity=None, sample_id=None, user_id=None,
+                      img_total_pixels=None, state_areas=None):
+    # Dimension 1: image (0-60)
+    # Primary path: use class area percentages from state_areas
+    if state_areas:
+        contamination_pct = state_areas.get("contamination_risk", 0) / 100
+        dry_aged_pct      = state_areas.get("dry_aged_mycelium",  0) / 100
+        exposed_pct       = state_areas.get("exposed_substrate",  0) / 100
+        penalty = contamination_pct * 1.0 + exposed_pct * 0.8 + dry_aged_pct * 0.3
+        img_score = round(60 * max(0.0, 1 - penalty))
+    else:
+        # Fallback: per-detection conf × area_ratio (old records / no state_areas)
+        img_score = 60.0
+        for d in detections:
+            conf = d["confidence"] / 100
+            name = d["class_name"]
+            area_ratio = min(1.0, d.get("area_pixels", 0) / img_total_pixels) if img_total_pixels else 1.0
+            if name in ("contaminated", "contamination_risk"):
+                img_score -= 30 * conf * area_ratio
+            elif name in ("dry_aging", "dry_aged_mycelium", "aging"):
+                img_score -= 15 * conf * area_ratio
+            elif name == "exposed_substrate":
+                img_score -= 25 * conf * area_ratio
+        img_score = round(max(0.0, img_score))
 
     # Dimension 2: delta humidity (0-30); None = no sensor data
+    # |ΔRH| < 5 → 30, 5-15 → linear, > 15 → 0
     if delta_humidity is not None:
-        dh = delta_humidity
-        if 5 <= dh <= 25:
+        abs_dh = abs(delta_humidity)
+        if abs_dh < 5:
             hum_score = 30
-        elif 0 <= dh < 5 or 25 < dh <= 35:
-            hum_score = 20
-        elif -10 <= dh < 0 or 35 < dh <= 50:
-            hum_score = 10
+        elif abs_dh <= 15:
+            hum_score = round(30 * (15 - abs_dh) / 10)
         else:
             hum_score = 0
     else:
         hum_score = None
 
-    # Dimension 3: trend (0-10); None = no prior history
-    trend_score = None
-    has_history = False
+    # Dimension 3: trend (0-10)
+    trend_score = 10
     if sample_id and user_id:
         try:
             conn = get_db()
@@ -397,27 +403,29 @@ def calc_health_score(detections, delta_humidity=None, sample_id=None, user_id=N
             ).fetchall()
             conn.close()
             sc = [r[0] for r in recent]
-            if sc:
-                has_history = True
-                if len(sc) >= 3 and sc[0] < sc[1] and sc[1] < sc[2]:
-                    trend_score = 0
-                elif len(sc) >= 2 and sc[0] < sc[1]:
-                    trend_score = 5
-                else:
-                    trend_score = 10
+            if len(sc) >= 3 and sc[0] < sc[1] and sc[1] < sc[2]:
+                trend_score = 0
+            elif len(sc) >= 2 and sc[0] < sc[1]:
+                trend_score = 5
         except Exception:
             pass
 
-    # Image-only mode: no humidity AND no detection history → scale img to 0-100
-    if hum_score is None and not has_history:
-        return max(0, min(100, round(img_score / 60 * 100)))
+    # Compute total
+    # Without humidity: scale (img + trend) / 70 → 100
+    # With humidity:    img + hum + trend (max 100)
+    has_humidity = hum_score is not None
+    if has_humidity:
+        total = max(0, min(100, img_score + hum_score + trend_score))
+    else:
+        total = max(0, min(100, round((img_score + trend_score) / 70 * 100)))
 
-    # Full mode: fill in neutral defaults for missing components
-    if hum_score is None:
-        hum_score = 15
-    if trend_score is None:
-        trend_score = 10
-    return max(0, min(100, round(img_score + hum_score + trend_score)))
+    return {
+        "total":        total,
+        "img":          img_score,
+        "hum":          hum_score,   # None if no humidity data
+        "trend":        trend_score,
+        "has_humidity": has_humidity,
+    }
 
 
 def main_state(detections):
@@ -582,13 +590,13 @@ def render_detection_image(base_img, result):
 
 
 def _add_legend_strip(img):
-    legend_h = 40
+    legend_h = 54
     w, h     = img.size
     canvas   = Image.new("RGB", (w, h + legend_h), (250, 248, 244))
     canvas.paste(img, (0, 0))
     draw   = ImageDraw.Draw(canvas)
-    font   = ImageFont.load_default(size=13)
-    swatch = 12
+    font   = ImageFont.load_default(size=20)
+    swatch = 16
     x = 16
     y = h + legend_h // 2
     for cls in LEGEND_ORDER:
@@ -688,10 +696,13 @@ def detect():
         # Find sensing delta for this sample+date
         delta, surf_hum, env_hum, temp_c = find_sensing_delta(user_id, sample_id, timestamp)
 
-        health_score = calc_health_score(detections, delta_humidity=delta,
-                                         sample_id=sample_id, user_id=user_id,
-                                         img_total_pixels=img_w * img_h)
-        yolo_state   = main_state(detections)
+        score_result = calc_health_score(detections, delta_humidity=delta,
+                                        sample_id=sample_id, user_id=user_id,
+                                        img_total_pixels=img_w * img_h,
+                                        state_areas=state_areas)
+        health_score    = score_result["total"]
+        score_breakdown = json.dumps(score_result)
+        yolo_state      = main_state(detections)
 
         conn = get_db()
         # Only auto-create a sample record for real sample IDs, not Quick Check
@@ -704,11 +715,11 @@ def detect():
             INSERT INTO detections
                 (user_id, sample_id, model_type, timestamp, image_path,
                  yolo_state, health_score, temp_c, env_humidity, surface_humidity,
-                 delta_humidity, notes, state_areas)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+                 delta_humidity, notes, state_areas, score_breakdown)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (user_id, sample_id, model_type, timestamp, filename,
               yolo_state, health_score, temp_c, env_hum, surf_hum, delta, notes,
-              json.dumps(state_areas) if state_areas else None))
+              json.dumps(state_areas) if state_areas else None, score_breakdown))
         conn.commit()
 
         realtime_delta = try_compute_delta_realtime(sample_id, user_id, conn)
@@ -818,9 +829,12 @@ def upload_csv():
     skipped  = 0
     conn     = get_db()
 
+    affected_samples = set()
+
     for row in reader:
         try:
-            ts        = row.get("datetime", "").strip()
+            # Accept both 'datetime' and 'timestamp' column names
+            ts        = (row.get("datetime") or row.get("timestamp") or "").strip()
             sample_id = row.get("sample_id", "").strip()
             if not ts or not sample_id:
                 skipped += 1
@@ -834,30 +848,77 @@ def upload_csv():
                 except ValueError:
                     continue
 
+            # Accept 'temperature' as alias for 'temp_c', 'humidity' as alias for sensor humidity
             if csv_type == "surface":
-                # Accept both 6-col (no model_type) and 7-col (with model_type)
-                surf_hum = float(row.get("surface_humidity") or row.get("surface_humid") or 0)
-                temp_c   = float(row.get("temp_c") or 0)
-                pressure = float(row.get("pressure_hpa") or 0)
+                surf_hum = float(row.get("surface_humidity") or row.get("surface_humid")
+                                 or row.get("humidity") or 0)
+                temp_c   = float(row.get("temp_c") or row.get("temperature") or 0)
+                pressure = float(row.get("pressure_hpa") or row.get("pressure") or 0)
                 conn.execute("""
                     INSERT INTO surface_readings
                         (user_id, sample_id, timestamp, temp_c, surface_humidity, pressure_hpa)
                     VALUES (?,?,?,?,?,?)
                 """, (user_id, sample_id, ts, temp_c, surf_hum, pressure))
-
             else:  # env
-                env_hum  = float(row.get("env_humidity") or row.get("env_humid") or 0)
-                temp_c   = float(row.get("temp_c") or 0)
-                pressure = float(row.get("pressure_hpa") or 0)
+                env_hum  = float(row.get("env_humidity") or row.get("env_humid")
+                                 or row.get("humidity") or 0)
+                temp_c   = float(row.get("temp_c") or row.get("temperature") or 0)
+                pressure = float(row.get("pressure_hpa") or row.get("pressure") or 0)
                 conn.execute("""
                     INSERT INTO env_readings
                         (user_id, sample_id, timestamp, temp_c, env_humidity, pressure_hpa)
                     VALUES (?,?,?,?,?,?)
                 """, (user_id, sample_id, ts, temp_c, env_hum, pressure))
 
+            affected_samples.add(sample_id)
             inserted += 1
         except Exception:
             skipped += 1
+
+    conn.commit()
+
+    # Back-fill scores for detections that had no humidity data at detection time
+    rescored = 0
+    for sid in affected_samples:
+        pending = conn.execute("""
+            SELECT id, timestamp, score_breakdown
+            FROM detections
+            WHERE user_id=? AND sample_id=? AND delta_humidity IS NULL
+        """, (user_id, sid)).fetchall()
+        for det in pending:
+            delta, surf_h, env_h, temp_c = find_sensing_delta(user_id, sid, det["timestamp"])
+            if delta is None:
+                continue
+            bd = None
+            try:
+                bd = json.loads(det["score_breakdown"]) if det["score_breakdown"] else None
+            except Exception:
+                pass
+            if bd:
+                abs_dh = abs(delta)
+                if abs_dh < 5:
+                    new_hum = 30
+                elif abs_dh <= 15:
+                    new_hum = round(30 * (15 - abs_dh) / 10)
+                else:
+                    new_hum = 0
+                new_total = max(0, min(100, bd["img"] + new_hum + bd["trend"]))
+                bd.update({"hum": new_hum, "has_humidity": True, "total": new_total})
+                new_breakdown = json.dumps(bd)
+            else:
+                new_total = None
+                new_breakdown = None
+            conn.execute("""
+                UPDATE detections
+                SET surface_humidity=?, env_humidity=?, delta_humidity=?, temp_c=COALESCE(temp_c,?)
+                    {score_update}
+                WHERE id=? AND user_id=?
+            """.replace("{score_update}",
+                        ", health_score=?, score_breakdown=?" if new_total is not None else ""),
+                ([surf_h, env_h, delta, temp_c] +
+                 ([new_total, new_breakdown] if new_total is not None else []) +
+                 [det["id"], user_id]))
+            rescored += 1
 
     conn.commit()
     conn.close()
@@ -866,6 +927,7 @@ def upload_csv():
         "success":  True,
         "inserted": inserted,
         "skipped":  skipped,
+        "rescored": rescored,
         "csv_type": csv_type,
     })
 
@@ -989,7 +1051,7 @@ def sample_detail(sample_id):
 
     det_rows = conn.execute("""
         SELECT id, timestamp, yolo_state, health_score, image_path, notes,
-               surface_humidity, env_humidity, delta_humidity, temp_c, state_areas
+               surface_humidity, env_humidity, delta_humidity, temp_c, state_areas, score_breakdown
         FROM detections
         WHERE user_id=? AND sample_id=?
         ORDER BY timestamp ASC
