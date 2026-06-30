@@ -1064,6 +1064,52 @@ def delete_sample(sample_id):
     return jsonify({"success": True})
 
 
+# ── Detection — delete single record ──────────────────────────────────────────
+@app.route("/detections/<int:det_id>", methods=["DELETE"])
+@require_auth
+def delete_detection(det_id):
+    user    = get_current_user()
+    user_id = user["user_id"]
+    conn    = get_db()
+    row = conn.execute(
+        "SELECT image_path FROM detections WHERE id=? AND user_id=?",
+        (det_id, user_id)
+    ).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"error": "Not found"}), 404
+    conn.execute("DELETE FROM detections WHERE id=? AND user_id=?", (det_id, user_id))
+    conn.commit()
+    conn.close()
+    if row["image_path"]:
+        _try_delete_file(os.path.join(UPLOAD_FOLDER, row["image_path"]))
+        stem = os.path.splitext(row["image_path"])[0]
+        _try_delete_file(os.path.join(UPLOAD_FOLDER, f"result_{stem}.jpg"))
+    return jsonify({"success": True})
+
+
+# ── Sample file — delete single record ────────────────────────────────────────
+@app.route("/sample-files/<int:file_id>", methods=["DELETE"])
+@require_auth
+def delete_sample_file_by_id(file_id):
+    user    = get_current_user()
+    user_id = user["user_id"]
+    conn    = get_db()
+    row = conn.execute(
+        "SELECT file_path FROM sample_files WHERE id=? AND user_id=?",
+        (file_id, user_id)
+    ).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"error": "Not found"}), 404
+    conn.execute("DELETE FROM sample_files WHERE id=? AND user_id=?", (file_id, user_id))
+    conn.commit()
+    conn.close()
+    if row["file_path"]:
+        _try_delete_file(os.path.join(UPLOAD_FOLDER, row["file_path"]))
+    return jsonify({"success": True})
+
+
 # ── Sample files — upload ─────────────────────────────────────────────────────
 @app.route("/sample-files", methods=["POST"])
 @require_auth

@@ -555,6 +555,13 @@ section { scroll-margin-top: 106px; }
 }
 .arc-simp-info { padding: 8px 10px; }
 .arc-simp-date { font-size: 10px; color: var(--text-3); }
+.arc-card-del-btn {
+  display: block; margin-top: 5px;
+  font-size: 10px; color: var(--h-danger);
+  background: none; border: none; padding: 0;
+  cursor: pointer; font-family: inherit; opacity: 0.65; text-align: left;
+}
+.arc-card-del-btn:hover { opacity: 1; }
 .arc-empty {
   text-align: center; padding: 32px 24px; color: var(--text-3);
   font-size: 13px; border: 1.5px dashed var(--brown-lt);
@@ -1724,6 +1731,7 @@ function renderMsArchive(d) {
             + '<div class="arc-hist-date">' + (det.timestamp ? det.timestamp.slice(0,10) : '—') + '</div>'
             + '<div class="arc-hist-score" style="color:' + scColor + '">' + sc + '/100</div>'
             + '<div style="margin-top:3px">' + badge(det.yolo_state) + '</div>'
+            + '<button class="arc-card-del-btn" onclick="event.stopPropagation();deleteDetection(' + det.id + ',\'' + esc(sid) + '\')">✕ Delete</button>'
             + '</div></div>';
         }).join('')
       + '</div>';
@@ -1746,8 +1754,9 @@ function renderMsArchive(d) {
             + (isImg
                 ? '<img class="arc-simp-thumb" src="' + API + '/image/' + escH(f.file_path) + '" alt="">'
                 : '<div class="arc-simp-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--brown-lt);font-size:22px">⊞</div>')
-            + '<div class="arc-simp-info"><div class="arc-simp-date">' + msDateTime(f.timestamp) + '</div></div>'
-            + '</div>';
+            + '<div class="arc-simp-info"><div class="arc-simp-date">' + msDateTime(f.timestamp) + '</div>'
+            + '<button class="arc-card-del-btn" onclick="deleteSampleFile(' + f.id + ',\'' + esc(sid) + '\')">✕ Delete</button>'
+            + '</div></div>';
         }).join('')
       + '</div>';
   } else {
@@ -1775,8 +1784,9 @@ function renderMsArchive(d) {
             + (isImg
                 ? '<img class="arc-simp-thumb" src="' + API + '/image/' + escH(f.file_path) + '" alt="">'
                 : '<div class="arc-simp-thumb" style="display:flex;align-items:center;justify-content:center;color:var(--brown-lt);font-size:22px">⊞</div>')
-            + '<div class="arc-simp-info"><div class="arc-simp-date">' + dateLabel + '</div></div>'
-            + '</div>';
+            + '<div class="arc-simp-info"><div class="arc-simp-date">' + dateLabel + '</div>'
+            + '<button class="arc-card-del-btn" onclick="deleteSampleFile(' + f.id + ',\'' + esc(sid) + '\')">✕ Delete</button>'
+            + '</div></div>';
         }).join('')
       + '</div>';
   } else {
@@ -2100,6 +2110,28 @@ async function submitArcDetection(sampleId) {
   } catch(e) {
     st.textContent = 'Error: ' + e.message; st.className = 'st-msg err';
   } finally { btn.disabled = false; btn.textContent = 'Run detection'; }
+}
+
+/* ── Archive — delete a single detection ────────────────────── */
+async function deleteDetection(detId, sampleId) {
+  if (!confirm('Delete this detection photo? This cannot be undone.')) return;
+  try {
+    var r = await authFetch(API + '/detections/' + detId, {method: 'DELETE'});
+    var d = await r.json();
+    if (!d.success) { alert(d.error || 'Delete failed.'); return; }
+    openMsArchive(sampleId);
+  } catch(e) { alert('Cannot reach server.'); }
+}
+
+/* ── Archive — delete a single sample file (humidity map / CC) ─ */
+async function deleteSampleFile(fileId, sampleId) {
+  if (!confirm('Delete this file? This cannot be undone.')) return;
+  try {
+    var r = await authFetch(API + '/sample-files/' + fileId, {method: 'DELETE'});
+    var d = await r.json();
+    if (!d.success) { alert(d.error || 'Delete failed.'); return; }
+    openMsArchive(sampleId);
+  } catch(e) { alert('Cannot reach server.'); }
 }
 
 /* ── Sensing CSV upload modal ────────────────────────────────── */
