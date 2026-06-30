@@ -565,6 +565,12 @@ section { scroll-margin-top: 106px; }
 .arc-hist-card--sel {
   box-shadow: 0 0 0 2px var(--brown-dk), 0 2px 10px rgba(50,30,10,.08);
 }
+.arc-hist-card--alarm {
+  background: #FFF0F0; border-color: #E24B4A;
+}
+.arc-hist-card--alarm.arc-hist-card--sel {
+  box-shadow: 0 0 0 2px #E24B4A, 0 2px 10px rgba(226,75,74,.15);
+}
 .arc-hist-thumb {
   width: 100%; aspect-ratio: 1; object-fit: cover;
   display: block; background: var(--surface-2);
@@ -1769,7 +1775,8 @@ function renderMsArchive(d) {
             || ('result_' + (det.image_path || '').replace(/\.[^.]+$/, '') + '.jpg');
           var sc = det.health_score != null ? det.health_score : '—';
           var scColor = det.health_score != null ? scoreColor(det.health_score) : 'var(--text-3)';
-          return '<div class="arc-hist-card" onclick="selectArchiveDet(' + i + ')">'
+          var isAlarm = det.health_score != null && det.health_score < 60;
+          return '<div class="arc-hist-card' + (isAlarm ? ' arc-hist-card--alarm' : '') + '" onclick="selectArchiveDet(' + i + ')">'
             + '<img class="arc-hist-thumb" src="' + API + '/image/' + escH(resultFile) + '" alt="" onerror="this.style.opacity=\'.2\'">'
             + '<div class="arc-hist-info">'
             + '<div class="arc-hist-date">' + (det.timestamp ? det.timestamp.slice(0,10) : '—') + '</div>'
