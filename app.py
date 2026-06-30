@@ -363,9 +363,9 @@ def calc_health_score(detections, delta_humidity=None, sample_id=None, user_id=N
         else:
             area_ratio = 1.0
         if name in ("contaminated", "contamination_risk"):
-            img_score -= 25 * conf * area_ratio
+            img_score -= 30 * conf * area_ratio
         elif name in ("dry_aging", "dry_aged_mycelium", "aging"):
-            img_score -= 8 * conf * area_ratio
+            img_score -= 15 * conf * area_ratio
         elif name == "exposed_substrate":
             img_score -= 25 * conf * area_ratio
     img_score = max(0.0, img_score)
