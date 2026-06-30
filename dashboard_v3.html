@@ -1165,27 +1165,33 @@ section { scroll-margin-top: 106px; }
   <div class="ms-modal-card" style="max-width:480px">
     <div class="ms-modal-title">Upload sensing CSV</div>
     <div style="font-size:12px;color:var(--text-2);margin-bottom:18px;line-height:1.7">
-      Import surface or environment humidity readings exported from the ESP32 sensor scripts.<br>
-      <span style="color:var(--brown-md)">Surface CSV columns:</span> datetime, sample_id, temp_c, surface_humidity, pressure_hpa<br>
-      <span style="color:var(--brown-md)">Env CSV columns:</span> datetime, sample_id, temp_c, env_humidity, pressure_hpa
+      Upload both CSV files to calculate the Humidity score. At least one is required.<br>
+      <span style="color:var(--brown-md)">Surface columns:</span> datetime, sample_id, temp_c, surface_humidity, pressure_hpa<br>
+      <span style="color:var(--brown-md)">Env columns:</span> datetime, sample_id, temp_c, env_humidity, pressure_hpa
     </div>
     <div class="ms-modal-field">
-      <label class="ms-modal-lbl">CSV type</label>
-      <select class="ms-modal-inp" id="sv-type" style="padding:8px 10px">
-        <option value="surface">Surface sensing (surface_humidity)</option>
-        <option value="env">Environment sensing (env_humidity)</option>
-      </select>
-    </div>
-    <div class="ms-modal-field">
-      <label class="ms-modal-lbl">CSV file</label>
+      <label class="ms-modal-lbl">Surface CSV <span style="font-weight:400;color:var(--text-3)">(surface_humidity)</span></label>
       <div style="display:flex;align-items:center;gap:10px">
-        <button type="button" onclick="document.getElementById('sv-file').click()"
+        <button type="button" onclick="document.getElementById('sv-surface-file').click()"
           style="font-size:12px;font-weight:500;padding:6px 14px;background:var(--surface);color:var(--brown-dk);border:1.5px solid var(--brown-dk);border-radius:var(--r);cursor:pointer;font-family:inherit;flex-shrink:0">
           Choose file
         </button>
-        <span id="sv-file-name" style="font-size:12px;color:var(--text-3)">No file chosen</span>
+        <span id="sv-surface-name" style="font-size:12px;color:var(--text-3)">No file chosen</span>
       </div>
-      <input id="sv-file" type="file" accept=".csv,text/csv" style="display:none" onchange="document.getElementById('sv-file-name').textContent=this.files[0]?this.files[0].name:'No file chosen'">
+      <input id="sv-surface-file" type="file" accept=".csv,text/csv" style="display:none"
+        onchange="document.getElementById('sv-surface-name').textContent=this.files[0]?this.files[0].name:'No file chosen'">
+    </div>
+    <div class="ms-modal-field">
+      <label class="ms-modal-lbl">Environment CSV <span style="font-weight:400;color:var(--text-3)">(env_humidity)</span></label>
+      <div style="display:flex;align-items:center;gap:10px">
+        <button type="button" onclick="document.getElementById('sv-env-file').click()"
+          style="font-size:12px;font-weight:500;padding:6px 14px;background:var(--surface);color:var(--brown-dk);border:1.5px solid var(--brown-dk);border-radius:var(--r);cursor:pointer;font-family:inherit;flex-shrink:0">
+          Choose file
+        </button>
+        <span id="sv-env-name" style="font-size:12px;color:var(--text-3)">No file chosen</span>
+      </div>
+      <input id="sv-env-file" type="file" accept=".csv,text/csv" style="display:none"
+        onchange="document.getElementById('sv-env-name').textContent=this.files[0]?this.files[0].name:'No file chosen'">
     </div>
     <input type="hidden" id="sv-sample-id">
     <div class="ms-modal-err" id="sv-err"></div>
@@ -1883,11 +1889,13 @@ function renderArcMetrics(det) {
     return 0;
   }
 
-  /* Trend from recent _archiveDets (newest first) */
+  /* Trend from recent _archiveDets (newest first); fallback when no score_breakdown */
   function trendFromHistory() {
     var sc_arr = _archiveDets.map(function(d) { return d.health_score; }).filter(function(s) { return s != null; });
-    if (sc_arr.length >= 3 && sc_arr[0] < sc_arr[1] && sc_arr[1] < sc_arr[2]) return 0;
-    if (sc_arr.length >= 2 && sc_arr[0] < sc_arr[1]) return 5;
+    if (sc_arr.length < 2) return 10;
+    var delta = sc_arr[0] - sc_arr[Math.min(sc_arr.length - 1, 2)];
+    if (delta < -10) return 0;
+    if (delta < -3)  return 5;
     return 10;
   }
 
@@ -2206,38 +2214,48 @@ async function deleteSampleFile(fileId, sampleId) {
 /* ── Sensing CSV upload modal ────────────────────────────────── */
 function showSensingUploadModal(sampleId) {
   document.getElementById('sv-sample-id').value = sampleId;
-  document.getElementById('sv-file').value  = '';
-  document.getElementById('sv-file-name').textContent = 'No file chosen';
-  document.getElementById('sv-err').textContent = '';
+  document.getElementById('sv-surface-file').value = '';
+  document.getElementById('sv-surface-name').textContent = 'No file chosen';
+  document.getElementById('sv-env-file').value = '';
+  document.getElementById('sv-env-name').textContent = 'No file chosen';
+  var err = document.getElementById('sv-err');
+  err.textContent = ''; err.style.color = '';
   document.getElementById('sensing-upload-modal').classList.add('open');
 }
 function closeSensingUploadModal() {
   document.getElementById('sensing-upload-modal').classList.remove('open');
 }
 async function submitSensingUpload() {
-  var sampleId = document.getElementById('sv-sample-id').value;
-  var csvType  = document.getElementById('sv-type').value;
-  var fileEl   = document.getElementById('sv-file');
-  var err      = document.getElementById('sv-err');
-  var btn      = document.getElementById('sv-submit');
-  err.textContent = '';
-  if (!fileEl.files[0]) { err.textContent = 'Please select a CSV file.'; return; }
-  var fd = new FormData();
-  fd.append('file',     fileEl.files[0]);
-  fd.append('csv_type', csvType);
+  var sampleId    = document.getElementById('sv-sample-id').value;
+  var surfaceFile = document.getElementById('sv-surface-file').files[0];
+  var envFile     = document.getElementById('sv-env-file').files[0];
+  var err         = document.getElementById('sv-err');
+  var btn         = document.getElementById('sv-submit');
+  err.textContent = ''; err.style.color = '';
+  if (!surfaceFile && !envFile) { err.textContent = 'Please select at least one CSV file.'; return; }
   btn.disabled = true; btn.textContent = 'Importing…';
+  var totalInserted = 0, totalRescored = 0;
   try {
-    var r = await authFetch(API + '/upload-csv', {method: 'POST', body: fd});
-    var d = await r.json();
-    if (!d.success) { err.textContent = d.error || 'Import failed.'; return; }
-    var msg = 'Imported ' + d.inserted + ' reading' + (d.inserted === 1 ? '' : 's');
-    if (d.rescored > 0) msg += ' · ' + d.rescored + ' detection' + (d.rescored === 1 ? '' : 's') + ' re-scored';
+    async function uploadOne(file, csvType) {
+      var fd = new FormData();
+      fd.append('file', file);
+      fd.append('csv_type', csvType);
+      var r = await authFetch(API + '/upload-csv', {method: 'POST', body: fd});
+      var d = await r.json();
+      if (!d.success) throw new Error(d.error || 'Import failed (' + csvType + ')');
+      totalInserted += d.inserted || 0;
+      totalRescored = Math.max(totalRescored, d.rescored || 0);
+    }
+    if (surfaceFile) await uploadOne(surfaceFile, 'surface');
+    if (envFile)     await uploadOne(envFile,     'env');
+    var msg = 'Imported ' + totalInserted + ' reading' + (totalInserted === 1 ? '' : 's');
+    if (totalRescored > 0) msg += ' · ' + totalRescored + ' detection' + (totalRescored === 1 ? '' : 's') + ' re-scored';
     err.style.color = 'var(--h-ok)'; err.textContent = msg;
     setTimeout(function() {
       closeSensingUploadModal();
       if (document.getElementById('ms-archive').style.display !== 'none') openMsArchive(_currentSampleId);
     }, 1200);
-  } catch(e) { err.textContent = 'Cannot reach server.'; }
+  } catch(e) { err.textContent = e.message || 'Cannot reach server.'; }
   finally { btn.disabled = false; btn.textContent = 'Import data'; }
 }
 

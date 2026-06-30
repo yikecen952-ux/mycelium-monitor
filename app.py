@@ -361,8 +361,8 @@ def calc_health_score(detections, delta_humidity=None, sample_id=None, user_id=N
         contamination_pct = state_areas.get("contamination_risk", 0) / 100
         dry_aged_pct      = state_areas.get("dry_aged_mycelium",  0) / 100
         exposed_pct       = state_areas.get("exposed_substrate",  0) / 100
-        penalty = contamination_pct * 1.0 + exposed_pct * 0.8 + dry_aged_pct * 0.3
-        img_score = round(60 * max(0.0, 1 - penalty))
+        penalty_pts = contamination_pct * 80 + exposed_pct * 60 + dry_aged_pct * 40
+        img_score = round(max(10.0, 60 - penalty_pts))
     else:
         # Fallback: per-detection conf × area_ratio (old records / no state_areas)
         img_score = 60.0
@@ -392,21 +392,25 @@ def calc_health_score(detections, delta_humidity=None, sample_id=None, user_id=N
         hum_score = None
 
     # Dimension 3: trend (0-10)
+    # Compare newest vs oldest among last 3 previous scores:
+    # delta >= -3 (stable/rising) → 10, -10 to -3 (slight drop) → 5, < -10 → 0
     trend_score = 10
     if sample_id and user_id:
         try:
             conn = get_db()
             recent = conn.execute(
                 "SELECT health_score FROM detections WHERE sample_id=? AND user_id=? "
-                "AND health_score IS NOT NULL ORDER BY id DESC LIMIT 4",
+                "AND health_score IS NOT NULL ORDER BY id DESC LIMIT 3",
                 (sample_id, user_id)
             ).fetchall()
             conn.close()
             sc = [r[0] for r in recent]
-            if len(sc) >= 3 and sc[0] < sc[1] and sc[1] < sc[2]:
-                trend_score = 0
-            elif len(sc) >= 2 and sc[0] < sc[1]:
-                trend_score = 5
+            if len(sc) >= 2:
+                delta_sc = sc[0] - sc[-1]   # newest vs oldest in fetched window
+                if delta_sc < -10:
+                    trend_score = 0
+                elif delta_sc < -3:
+                    trend_score = 5
         except Exception:
             pass
 
@@ -881,7 +885,7 @@ def upload_csv():
     rescored = 0
     for sid in affected_samples:
         pending = conn.execute("""
-            SELECT id, timestamp, score_breakdown
+            SELECT id, timestamp, score_breakdown, state_areas
             FROM detections
             WHERE user_id=? AND sample_id=? AND delta_humidity IS NULL
         """, (user_id, sid)).fetchall()
@@ -894,7 +898,10 @@ def upload_csv():
                 bd = json.loads(det["score_breakdown"]) if det["score_breakdown"] else None
             except Exception:
                 pass
+            new_total = None
+            new_breakdown = None
             if bd:
+                # Update hum component in existing breakdown
                 abs_dh = abs(delta)
                 if abs_dh < 5:
                     new_hum = 30
@@ -906,8 +913,17 @@ def upload_csv():
                 bd.update({"hum": new_hum, "has_humidity": True, "total": new_total})
                 new_breakdown = json.dumps(bd)
             else:
-                new_total = None
-                new_breakdown = None
+                # Old record without score_breakdown — full rescore using state_areas
+                sa = None
+                try:
+                    sa = json.loads(det["state_areas"]) if det["state_areas"] else None
+                except Exception:
+                    pass
+                if sa:
+                    sr = calc_health_score([], delta_humidity=delta,
+                                          sample_id=sid, user_id=user_id, state_areas=sa)
+                    new_total = sr["total"]
+                    new_breakdown = json.dumps(sr)
             conn.execute("""
                 UPDATE detections
                 SET surface_humidity=?, env_humidity=?, delta_humidity=?, temp_c=COALESCE(temp_c,?)
