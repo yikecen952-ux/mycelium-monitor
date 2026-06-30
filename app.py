@@ -1142,6 +1142,81 @@ def delete_sample(sample_id):
     return jsonify({"success": True})
 
 
+# ── Sample sensing data — delete all readings and reset detection scores ───────
+@app.route("/samples/<sample_id>/sensing", methods=["DELETE"])
+@require_auth
+def delete_sample_sensing(sample_id):
+    user    = get_current_user()
+    user_id = user["user_id"]
+    conn    = get_db()
+
+    # Verify ownership
+    if not conn.execute(
+        "SELECT 1 FROM samples WHERE sample_id=? AND user_id=?", (sample_id, user_id)
+    ).fetchone():
+        conn.close()
+        return jsonify({"error": "Sample not found or not yours"}), 404
+
+    # Delete all sensor readings for this sample
+    conn.execute("DELETE FROM surface_readings WHERE sample_id=? AND user_id=?", (sample_id, user_id))
+    conn.execute("DELETE FROM env_readings     WHERE sample_id=? AND user_id=?", (sample_id, user_id))
+
+    # Reset detections that had humidity data: clear humidity columns, recompute score without hum
+    pending = conn.execute("""
+        SELECT id, score_breakdown, state_areas
+        FROM detections
+        WHERE user_id=? AND sample_id=? AND delta_humidity IS NOT NULL
+    """, (user_id, sample_id)).fetchall()
+
+    rescored = 0
+    for det in pending:
+        bd = None
+        try:
+            bd = json.loads(det["score_breakdown"]) if det["score_breakdown"] else None
+        except Exception:
+            pass
+
+        new_total     = None
+        new_breakdown = None
+
+        if bd and bd.get("img") is not None and bd.get("trend") is not None:
+            bd.update({"hum": None, "has_humidity": False})
+            bd["total"] = max(0, min(100, round((bd["img"] + bd["trend"]) / 70 * 100)))
+            new_total     = bd["total"]
+            new_breakdown = json.dumps(bd)
+        else:
+            sa = None
+            try:
+                sa = json.loads(det["state_areas"]) if det["state_areas"] else None
+            except Exception:
+                pass
+            if sa:
+                sr = calc_health_score([], delta_humidity=None,
+                                       sample_id=sample_id, user_id=user_id, state_areas=sa)
+                new_total     = sr["total"]
+                new_breakdown = json.dumps(sr)
+
+        if new_total is not None:
+            conn.execute("""
+                UPDATE detections
+                SET surface_humidity=NULL, env_humidity=NULL, delta_humidity=NULL, temp_c=NULL,
+                    health_score=?, score_breakdown=?
+                WHERE id=? AND user_id=?
+            """, (new_total, new_breakdown, det["id"], user_id))
+        else:
+            conn.execute("""
+                UPDATE detections
+                SET surface_humidity=NULL, env_humidity=NULL, delta_humidity=NULL, temp_c=NULL
+                WHERE id=? AND user_id=?
+            """, (det["id"], user_id))
+        rescored += 1
+
+    conn.commit()
+    conn.close()
+    print(f"🗑 Cleared sensing data for sample {sample_id} by user {user_id}, rescored {rescored}", flush=True)
+    return jsonify({"success": True, "rescored": rescored})
+
+
 # ── Detection — delete single record ──────────────────────────────────────────
 @app.route("/detections/<int:det_id>", methods=["DELETE"])
 @require_auth

@@ -1752,7 +1752,10 @@ function renderMsArchive(d) {
     + '<div class="arc-detail-card"><div class="arc-card-title">Score breakdown</div><div id="arc-breakdown-panel"></div></div>'
     + '<div class="arc-detail-card"><div class="arc-card-title">Detections found</div><div id="arc-detections-panel"></div></div>'
     + '<div class="arc-detail-card"><div class="arc-card-title">Sensing</div><div id="arc-sensing-panel" style="flex:1"></div>'
-    + '<button class="arc-upload-sm" style="width:100%;margin-top:16px;flex-shrink:0" onclick="showSensingUploadModal(\'' + esc(sid) + '\')">Upload sensing data (CSV)</button>'
+    + '<div style="margin-top:16px;flex-shrink:0;display:flex;flex-direction:column;gap:8px">'
+    + '<button class="arc-upload-sm" style="width:100%" onclick="showSensingUploadModal(\'' + esc(sid) + '\')">Upload sensing data (CSV)</button>'
+    + '<button class="arc-upload-sm" style="width:100%;color:var(--h-danger);border-color:var(--h-danger)" onclick="deleteSensingData(\'' + esc(sid) + '\')">Clear sensing data</button>'
+    + '</div>'
     + '</div>'
     + '</div>';
 
@@ -2274,6 +2277,18 @@ function showSensingUploadModal(sampleId) {
 function closeSensingUploadModal() {
   document.getElementById('sensing-upload-modal').classList.remove('open');
 }
+async function deleteSensingData(sampleId) {
+  if (!confirm('Delete all sensing data for this sample?\n\nThis clears all surface and environment humidity readings, and resets Humidity scores on all detections. This cannot be undone.')) return;
+  try {
+    var r = await authFetch(API + '/samples/' + encodeURIComponent(sampleId) + '/sensing', {method: 'DELETE'});
+    var d = await r.json();
+    if (!d.success) throw new Error(d.error || 'Delete failed');
+    openMsArchive(sampleId);
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+}
+
 async function submitSensingUpload() {
   var sampleId    = document.getElementById('sv-sample-id').value;
   var surfaceFile = document.getElementById('sv-surface-file').files[0];
