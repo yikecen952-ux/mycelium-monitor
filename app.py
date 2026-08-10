@@ -513,6 +513,11 @@ def try_compute_delta_realtime(sample_id, user_id, conn):
 @app.route("/", methods=["GET"])
 def index():
     from flask import send_from_directory
+    return send_from_directory(".", "landing.html")
+
+@app.route("/app", methods=["GET"])
+def app_main():
+    from flask import send_from_directory
     return send_from_directory(".", "dashboard_v3.html")
 
 @app.route("/api/status", methods=["GET"])

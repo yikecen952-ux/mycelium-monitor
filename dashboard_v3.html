@@ -438,44 +438,47 @@ section { scroll-margin-top: 106px; }
 .ms-card-arrow { margin-left: auto; color: var(--brown-lt); font-size: 18px; flex-shrink: 0; }
 
 /* ── Archive page ───────────────────────────────────────── */
-.arc-id-bar {
-  display: flex; align-items: flex-start; gap: 24px;
-  background: var(--surface); border-radius: var(--r-lg);
-  padding: 28px 32px; margin-bottom: 24px;
-  box-shadow: 0 2px 16px rgba(50,30,10,.07), 0 1px 4px rgba(50,30,10,.04);
+.arc-id-compact {
+  display: flex; align-items: flex-start; gap: 12px;
+  margin-bottom: 16px;
 }
 .arc-id-thumb {
-  width: 100px; height: 100px; border-radius: var(--r);
+  width: 56px; height: 56px; border-radius: var(--r);
   object-fit: cover; border: 1px solid var(--brown-lt);
   background: var(--surface); flex-shrink: 0;
 }
 .arc-id-ph {
-  width: 100px; height: 100px; border-radius: var(--r);
+  width: 56px; height: 56px; border-radius: var(--r);
   background: var(--surface); border: 1px solid var(--brown-lt);
   display: flex; align-items: center; justify-content: center;
-  color: var(--brown-lt); font-size: 32px; flex-shrink: 0;
+  color: var(--brown-lt); font-size: 22px; flex-shrink: 0;
 }
 .arc-id-mid { flex: 1; min-width: 0; }
 .arc-id-name {
-  font-size: 22px; font-weight: 300; color: var(--brown-dk);
-  letter-spacing: -.3px; margin-bottom: 6px;
+  font-size: 16px; font-weight: 600; color: var(--brown-dk);
+  letter-spacing: -.2px; margin-bottom: 4px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.arc-id-sub { font-size: 12px; color: var(--text-3); margin-bottom: 4px; }
+.arc-id-sub { font-size: 11px; color: var(--text-3); margin-bottom: 6px; }
 .arc-id-del {
-  margin-top: 14px; font-size: 11px; color: var(--h-danger);
+  font-size: 10px; color: var(--h-danger);
   background: none; border: 1px solid var(--h-danger);
-  border-radius: var(--r); padding: 5px 12px;
+  border-radius: var(--r); padding: 3px 9px;
   cursor: pointer; font-family: inherit; opacity: 0.8;
 }
+.arc-id-chart-block { margin-bottom: 16px; }
 .arc-id-chart {
-  width: 240px; flex-shrink: 0; height: 100px; position: relative;
+  width: 100%; height: 80px; position: relative;
 }
 .arc-id-chart-empty {
-  width: 240px; flex-shrink: 0; height: 100px;
+  width: 100%; height: 80px;
   display: flex; align-items: center; justify-content: center;
   font-size: 11px; color: var(--text-3);
   background: var(--surface); border: 1px solid var(--brown-lt);
   border-radius: var(--r);
+}
+.arc-upload-divider {
+  border-top: 1px solid var(--brown-lt); margin: 0 0 14px;
 }
 .arc-section {
   margin-bottom: 20px;
@@ -501,12 +504,14 @@ section { scroll-margin-top: 106px; }
 .arc-upload-sm:hover { background: var(--brown-dk); color: #fff; }
 .arc-det-top {
   display: grid; grid-template-columns: 1fr 2fr 150px; gap: 20px;
-  margin-bottom: 16px; align-items: start;
+  margin-bottom: 16px; align-items: stretch;
 }
 .arc-upload-col {
   background: var(--surface-2); border-radius: var(--r);
   padding: 16px 18px;
+  display: flex; flex-direction: column;
 }
+.arc-newdet-block { margin-top: auto; }
 .arc-main-col {
   background: var(--surface-2); border-radius: var(--r); overflow: hidden;
 }
@@ -1710,23 +1715,26 @@ function renderMsArchive(d) {
     ? '<canvas id="arc-trend-canvas" style="width:100%;height:100%"></canvas>'
     : '<div class="arc-id-chart-empty">No trend data yet</div>';
 
-  var idBar = '<div class="arc-id-bar">'
-    + idThumb
-    + '<div class="arc-id-mid">'
-    + '<div class="eyebrow" style="margin-bottom:4px">Sample archive</div>'
-    + '<div class="arc-id-name">' + escH(s.name || sid) + '</div>'
-    + '<div class="arc-id-sub">' + escH(sid) + ' · created ' + msDate(s.created_at) + '</div>'
-    + '<button class="arc-id-del" onclick="deleteSample(\'' + esc(sid) + '\',' + dets.length + ')">Delete sample…</button>'
-    + '</div>'
-    + '<div class="arc-id-chart">' + trendHtml + '</div>'
-    + '</div>';
-
   /* ── Detection Photos section ── */
   var now = new Date();
   var nowDate = now.toISOString().slice(0,10);
   var nowTime = now.toTimeString().slice(0,5);
 
   var uploadCol = '<div class="arc-upload-col">'
+    + '<div class="arc-id-compact">'
+    + idThumb
+    + '<div class="arc-id-mid">'
+    + '<div class="arc-id-name">' + escH(s.name || sid) + '</div>'
+    + '<div class="arc-id-sub">' + escH(sid) + ' · created ' + msDate(s.created_at) + '</div>'
+    + '<button class="arc-id-del" onclick="deleteSample(\'' + esc(sid) + '\',' + dets.length + ')">Delete sample…</button>'
+    + '</div>'
+    + '</div>'
+    + '<div class="arc-id-chart-block">'
+    + '<div class="arc-card-title" style="margin-bottom:6px">Trend data</div>'
+    + '<div class="arc-id-chart">' + trendHtml + '</div>'
+    + '</div>'
+    + '<div class="arc-upload-divider"></div>'
+    + '<div class="arc-newdet-block">'
     + '<div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--brown-md);margin-bottom:12px">New detection</div>'
     + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
     + '<button type="button" onclick="document.getElementById(\'arc-det-file\').click()" style="font-size:12px;font-weight:500;padding:6px 12px;background:var(--surface);color:var(--brown-dk);border:1.5px solid var(--brown-dk);border-radius:var(--r);cursor:pointer;font-family:inherit;white-space:nowrap">Choose photo</button>'
@@ -1740,6 +1748,7 @@ function renderMsArchive(d) {
     + '</div>'
     + '<button id="arc-det-btn" onclick="submitArcDetection(\'' + esc(sid) + '\')" class="btn-primary" style="margin-top:8px">Run detection</button>'
     + '<div class="st-msg" id="arc-det-st"></div>'
+    + '</div>'
     + '</div>';
 
   var mainCol = '<div class="arc-main-col">'
@@ -1849,7 +1858,7 @@ function renderMsArchive(d) {
     + '<button class="arc-upload-sm" onclick="showUploadFileModal(\'' + esc(sid) + '\',\'cloudcompare\',\'CloudCompare Result\')">+ Upload result</button>'
     + '</div>' + ccCards + '</div>';
 
-  document.getElementById('ms-archive-content').innerHTML = idBar + detSection + ccSection + mapSection;
+  document.getElementById('ms-archive-content').innerHTML = detSection + ccSection + mapSection;
 
   /* Init trend chart */
   if (trendDetsChron.length >= 2) {

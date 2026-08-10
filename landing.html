@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MYCOLOGIC · Mycelium Health Monitor</title>
+<style>
+:root {
+  --brown-dk:  #8A6946;
+  --brown-md:  #AF9273;
+  --brown-lt:  #CFBBA2;
+  --cream:     #EFE2CA;
+
+  --surface:   #FFFFFF;
+  --text:      #1A1612;
+  --text-2:    #6B5E52;
+  --text-3:    #A89880;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.landing {
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 32px 24px;
+}
+
+.landing-eyebrow {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--brown-md);
+  margin-bottom: 28px;
+}
+
+.landing-title {
+  font-size: clamp(48px, 10vw, 96px);
+  font-weight: 700;
+  letter-spacing: -1.5px;
+  line-height: 1;
+  color: var(--brown-dk);
+  margin-bottom: 20px;
+}
+
+.landing-sub {
+  font-size: clamp(14px, 1.8vw, 17px);
+  line-height: 1.6;
+  color: var(--text-2);
+  max-width: 480px;
+  margin-bottom: 44px;
+}
+
+.btn-enter {
+  display: inline-block;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 14px 34px;
+  background: var(--brown-dk);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  text-decoration: none;
+  transition: opacity .15s, transform .15s;
+}
+.btn-enter:hover { opacity: .88; transform: translateY(-1px); }
+.btn-enter:active { transform: translateY(0); opacity: .8; }
+
+.landing-footer {
+  position: absolute;
+  bottom: 28px;
+  left: 0; right: 0;
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+@media (max-width: 480px) {
+  .landing { padding: 24px 20px; }
+  .landing-footer { bottom: 20px; }
+}
+</style>
+</head>
+<body>
+
+<div class="landing">
+  <div class="landing-eyebrow">Bartlett School of Architecture, UCL · RC7 Bio-Integrated Design</div>
+  <div class="landing-title">Mycologic</div>
+  <div class="landing-sub">A monitoring platform for living biomaterial — track, record, and respond before damage becomes visible.</div>
+  <a class="btn-enter" href="/app">Enter platform →</a>
+</div>
+
+<div class="landing-footer">Built by Kecen Yi · Beckett Lab</div>
+
+</body>
+</html>
