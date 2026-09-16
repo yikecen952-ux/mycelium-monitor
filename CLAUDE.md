@@ -13,7 +13,7 @@ A web-based mycelium health monitoring system for an MArch thesis (RC7, Bartlett
 ## Tech stack
 
 - **Backend:** Flask (single file, `app.py`), SQLite, JWT auth (PyJWT), bcrypt
-- **Frontend:** single-page `dashboard_v3.html` (vanilla JS, Chart.js, Leaflet) + `admin.html`
+- **Frontend:** `landing.html` (marketing/entry page, served at `/`) + single-page app `dashboard_v3.html` (vanilla JS, Chart.js, Leaflet, served at `/app`) + `admin.html`
 - **ML:** Ultralytics YOLO, model file `best.pt` — **segmentation model** (`model.task == "segment"`), trained entirely on polygon annotations
 - **Sensors:** `sensor_surface.py` (ESP32 COM7, surface humidity), `sensor_env.py` (ESP32 COM4, environment humidity)
 - **Deploy:** Railway, auto-deploys from GitHub `master` branch on push. Built via `Dockerfile` (python:3.11-slim).
@@ -23,7 +23,8 @@ A web-based mycelium health monitoring system for an MArch thesis (RC7, Bartlett
 | File | Role |
 |------|------|
 | `app.py` | Flask backend — all routes, auth, scoring, Roboflow upload |
-| `dashboard_v3.html` | Main user-facing single-page app (served at `/`) |
+| `landing.html` | Entry/marketing page (served at `/`) |
+| `dashboard_v3.html` | Main user-facing single-page app (served at `/app`) |
 | `admin.html` | Password-protected admin panel (served at `/admin`) |
 | `best.pt` | Trained YOLO weights (~5 MB, committed to git) |
 | `sensor_surface.py` / `sensor_env.py` | Local sensor capture scripts (not run on server) |
@@ -55,7 +56,7 @@ Never hardcode `mycelium.db` or `uploads/` back to the project root — that wou
 
 ### Deployment essentials (these were hard-won — keep them)
 - `app.run(debug=False, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))` — Railway injects `PORT`; `debug=True` causes 502s.
-- `/` serves `dashboard_v3.html` via `send_from_directory`, not JSON.
+- `/` serves `landing.html` and `/app` serves `dashboard_v3.html`, both via `send_from_directory`, not JSON.
 - Frontend `const API` must point to the Railway domain, not `127.0.0.1`.
 - `print(..., flush=True)` for anything you need to see in Railway logs (output is otherwise buffered).
 
