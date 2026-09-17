@@ -148,61 +148,17 @@ main { width: 100%; }
   letter-spacing: 0;
   margin: 0 0 0.35vw;
 }
-.hero-credits .credits-org {
-  font-family: "PingFang SC-Thin", Helvetica;
-  font-weight: 100;
-  color: #6b5e52;
-  font-size: clamp(10px, 0.972vw, 15px);
-  letter-spacing: 0;
-  line-height: 1.5;
-  margin: 0;
-}
-
 .hero-visual {
-  flex: 1 1 57%;
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 57%;
   max-width: 60%;
-  position: relative;
 }
 .hero-visual img {
   display: block;
   width: 100%;
   height: auto;
-}
-
-/* ---------- feature navigation ---------- */
-.feature-nav {
-  width: 100%;
-  background-color: #f2edde;
-  padding: 3.5vw 2.5vw 4vw;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-}
-.feature-item {
-  text-align: center;
-  padding: 0 3.5vw;
-  border-left: 1px solid #cfbba2;
-}
-.feature-item:first-child { border-left: none; }
-.feature-item img {
-  width: clamp(28px, 2.4vw, 40px);
-  height: clamp(28px, 2.4vw, 40px);
-  margin: 0 auto 16px;
-  display: block;
-}
-.feature-item h3 {
-  font-family: "Inter-Medium", Helvetica;
-  font-weight: 500;
-  color: #8a6946;
-  font-size: clamp(13px, 1.05vw, 16px);
-  letter-spacing: .04em;
-  margin-bottom: 10px;
-}
-.feature-item p {
-  font-family: "Inter-Regular", Helvetica;
-  font-weight: 400;
-  color: #6b5e52;
-  font-size: clamp(12px, 0.9vw, 14px);
-  line-height: 1.6;
 }
 
 /* ══════════════════════════════════════════════
@@ -262,10 +218,6 @@ main { width: 100%; }
     font-family: "PingFang SC-Light", Helvetica;
     font-size: 14px; color: #1a1612; margin-bottom: 4px;
   }
-  .mobile .m-footer-line2 {
-    font-family: "PingFang SC-Thin", Helvetica;
-    font-size: 11px; color: #6b5e52; line-height: 1.5;
-  }
   .mobile .m-gallery {
     margin-top: 32px;
     text-align: center;
@@ -276,23 +228,6 @@ main { width: 100%; }
     filter: drop-shadow(0 12px 18px rgba(70,50,20,.14));
   }
 
-  .mobile .m-features {
-    background: #f2edde;
-    padding: 44px 22px;
-    display: flex; flex-direction: column; gap: 32px;
-  }
-  .mobile .m-feature { text-align: center; padding-top: 28px; border-top: 1px solid #cfbba2; }
-  .mobile .m-feature:first-child { border-top: none; padding-top: 0; }
-  .mobile .m-feature img { width: 30px; height: 30px; margin: 0 auto 14px; display: block; }
-  .mobile .m-feature h3 {
-    font-family: "Inter-Medium", Helvetica;
-    color: #8a6946; font-size: 14px; letter-spacing: .04em;
-    margin-bottom: 10px;
-  }
-  .mobile .m-feature p {
-    font-family: "Inter-Regular", Helvetica;
-    color: #6b5e52; font-size: 13px; line-height: 1.6;
-  }
 }
 </style>
 </head>
@@ -324,31 +259,12 @@ main { width: 100%; }
         </a>
 
         <div class="hero-credits">
-          <p class="credits-name">Built by Kecen Yi . Beckett Lab</p>
-          <p class="credits-org">BARTLETT SCHOOL OF ARCHITECTURE, UCL . RC7 BIO-INTEGRATED DESIGN</p>
+          <p class="credits-name">Built by Kecen Yi</p>
         </div>
       </div>
 
       <div class="hero-visual">
         <img src="static/images/hero_right.png" alt="">
-      </div>
-    </section>
-
-    <section class="feature-nav">
-      <div class="feature-item">
-        <img src="static/images/sync_saved_locally.png" alt="">
-        <h3>QUICK CHECK</h3>
-        <p>Instant health reading. Upload a photo, get a score. No sensors, no setup.</p>
-      </div>
-      <div class="feature-item">
-        <img src="static/images/cards_stack.png" alt="">
-        <h3>SAMPLE ARCHIVE</h3>
-        <p>Long-term specimen care. Track changes over time with photos, scans, and sensing data.</p>
-      </div>
-      <div class="feature-item">
-        <img src="static/images/archive.png" alt="">
-        <h3>CONTRIBUTE</h3>
-        <p>Help train the model. Annotate and submit — every image improves detection.</p>
       </div>
     </section>
   </main>
@@ -375,29 +291,10 @@ main { width: 100%; }
         <path d="M0 3.5H16M16 3.5L11 0.5M16 3.5L11 6.5" stroke="white" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
     </a>
-    <div class="m-footer-line1">Built by Kecen Yi . Beckett Lab</div>
-    <div class="m-footer-line2">BARTLETT SCHOOL OF ARCHITECTURE, UCL .<br>RC7 BIO-INTEGRATED DESIGN</div>
+    <div class="m-footer-line1">Built by Kecen Yi</div>
 
     <div class="m-gallery">
       <img src="static/images/hero_right.png" alt="">
-    </div>
-  </div>
-
-  <div class="m-features">
-    <div class="m-feature">
-      <img src="static/images/sync_saved_locally.png" alt="">
-      <h3>QUICK CHECK</h3>
-      <p>Instant health reading. Upload a photo, get a score. No sensors, no setup.</p>
-    </div>
-    <div class="m-feature">
-      <img src="static/images/cards_stack.png" alt="">
-      <h3>SAMPLE ARCHIVE</h3>
-      <p>Long-term specimen care. Track changes over time with photos, scans, and sensing data.</p>
-    </div>
-    <div class="m-feature">
-      <img src="static/images/archive.png" alt="">
-      <h3>CONTRIBUTE</h3>
-      <p>Help train the model. Annotate and submit — every image improves detection.</p>
     </div>
   </div>
 </div>
