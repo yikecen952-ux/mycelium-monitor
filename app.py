@@ -205,6 +205,22 @@ def init_db():
         except Exception:
             pass  # Column already exists — fine
 
+    # ── Indexes: keep per-user/sample/date lookups fast as sensor logs grow ─
+    indexes = [
+        ("idx_detections_user_sample",       "detections",       "user_id, sample_id"),
+        ("idx_detections_user_sample_ts",    "detections",       "user_id, sample_id, timestamp"),
+        ("idx_surface_user_sample_ts",       "surface_readings", "user_id, sample_id, timestamp"),
+        ("idx_env_user_sample_ts",           "env_readings",     "user_id, sample_id, timestamp"),
+        ("idx_contributions_status",         "contributions",    "status"),
+    ]
+    for idx_name, table, cols in indexes:
+        try:
+            conn.execute(f"CREATE INDEX IF NOT EXISTS {idx_name} ON {table} ({cols})")
+        except Exception as e:
+            print(f"⚠️  Index {idx_name} error: {e}")
+    conn.commit()
+    print("✅ Indexes ready")
+
     # ── Create / reset admin account (Kecen Yi) ────────────────────────────
     try:
         pw_hash = bcrypt.hashpw("yikecen".encode(), bcrypt.gensalt()).decode()
@@ -644,7 +660,7 @@ def detect():
     try:
         img.save(save_path, "JPEG", quality=90)
 
-        results = model(save_path, conf=0.1)
+        results = model(img, conf=0.1)   # run inference on the already-decoded image, skip re-reading save_path from disk
         result  = results[0]
 
         result_filename = f"result_{os.path.splitext(filename)[0]}.jpg"
@@ -1650,6 +1666,24 @@ def admin_detections():
     return jsonify({"records": [dict(r) for r in rows]})
 
 
+@app.route("/admin/uploads-stats", methods=["GET"])
+@require_admin
+def admin_uploads_stats():
+    """Read-only: file count + total size of the uploads folder on the Railway volume."""
+    file_count  = 0
+    total_bytes = 0
+    for entry in os.scandir(UPLOAD_FOLDER):
+        if entry.is_file():
+            file_count  += 1
+            total_bytes += entry.stat().st_size
+    return jsonify({
+        "upload_folder": UPLOAD_FOLDER,
+        "file_count":    file_count,
+        "total_bytes":   total_bytes,
+        "total_mb":      round(total_bytes / (1024 * 1024), 1),
+    })
+
+
 @app.route("/admin/images", methods=["GET"])
 @require_admin
 def admin_images():
@@ -1770,4 +1804,4 @@ def reset_admin():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     print(f"🚀 SYMBIO-FRAME backend starting on port {port}")
-    app.run(debug=False, host="0.0.0.0", port=port)
+    app.run(debug=False, host="0.0.0.0", port=port, threaded=True)
